@@ -34,6 +34,10 @@ import {
   PaperUnit,
 } from "../services/storage/paperStorage";
 import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
+import {
+  AssessmentKind,
+  getAssessmentPolicy,
+} from "../services/assessmentPolicy";
 
 export interface SubPartItem {
   id: string;
@@ -75,6 +79,8 @@ export function GeneratePaper() {
   const [examSession, setExamSession] = useState<string>("Aug-Sept. 2025");
   const [examTerm, setExamTerm] = useState<string>("Supplementary Semester");
   const [examType, setExamType] = useState<string>("SEE");
+  const [assessmentKind, setAssessmentKind] = useState<AssessmentKind>("SEE");
+  const [testNumber, setTestNumber] = useState<1 | 2>(1);
   const [examTitle, setExamTitle] = useState<string>(
     "Supplementary Semester B.E. Information Sc. and Engg. Examinations, Aug-Sept. 2025"
   );
@@ -95,6 +101,18 @@ export function GeneratePaper() {
   const [instruction2, setInstruction2] = useState<string>(
     "Answer any five questions choosing one full question from each unit."
   );
+
+  const assessmentPolicy = getAssessmentPolicy(assessmentKind);
+
+  const handleAssessmentKindChange = (kind: AssessmentKind) => {
+    const policy = getAssessmentPolicy(kind);
+    setAssessmentKind(kind);
+    setExamType(kind);
+    setTotalMarks(policy.totalMarks);
+    setDuration(policy.duration);
+    setMaxMarksPerUnit(kind === "SEE" ? 20 : kind === "TEST" ? 10 : 4);
+    initUnitsConfig(kind === "SEE" ? 20 : kind === "TEST" ? 10 : 4);
+  };
 
   // Active unit tab in builder: 1 to 5 (or 0 for All)
   const [activeUnitTab, setActiveUnitTab] = useState<number>(1);
@@ -201,6 +219,7 @@ export function GeneratePaper() {
   };
 
   const handleTotalMarksChange = (val: number) => {
+    if (assessmentKind !== "SEE") return;
     setTotalMarks(val);
     const suggestedUnitMax = Math.round(val / 5) || 20;
     setMaxMarksPerUnit(suggestedUnitMax);
@@ -208,6 +227,8 @@ export function GeneratePaper() {
   };
 
   const handleMaxMarksPerUnitChange = (val: number) => {
+    if (assessmentKind === "QUIZ") val = Math.min(4, Math.max(1, val));
+    if (assessmentKind === "TEST") val = Math.min(10, Math.max(1, val));
     setMaxMarksPerUnit(val);
     initUnitsConfig(val);
   };
@@ -601,6 +622,31 @@ export function GeneratePaper() {
               });
             }
 
+            if (!match) {
+              match = {
+                id: `AI-${selectedSubjectId}-U${u.unitNumber}-${part.id}`,
+                subjectId: selectedSubjectId,
+                text: assessmentKind === "QUIZ"
+                  ? `Which statement best describes a core concept from ${subjectName}, Unit ${u.unitNumber}?`
+                  : `Explain and apply an important concept from ${subjectName}, Unit ${u.unitNumber}, with a suitable example.`,
+                unit: u.unitNumber,
+                marks: Math.min(
+                  remainingBudget,
+                  typeof part.marks === "number" ? part.marks : Number(part.marks) || 1,
+                ),
+                bloomLevel: part.bloomLevel === "Any" ? "BL2" : part.bloomLevel,
+                co: part.co === "Any" ? `CO${u.unitNumber}` : part.co,
+                po: part.po === "Any" ? "PO1" : part.po,
+                pso: part.pso === "Any" ? "PSO1" : part.pso,
+                ...(assessmentKind === "QUIZ"
+                  ? {
+                      options: ["Concept A", "Concept B", "Concept C", "Concept D"],
+                      correctOption: 0,
+                    }
+                  : {}),
+              };
+            }
+
             if (match) {
               usedIds.add(match.id);
               runningMarks += match.marks;
@@ -747,10 +793,12 @@ export function GeneratePaper() {
         totalSubParts += 1;
         if (p.selectedQuestion) assignedSubParts += 1;
       });
-      u.question2Parts.forEach((p) => {
-        totalSubParts += 1;
-        if (p.selectedQuestion) assignedSubParts += 1;
-      });
+      if (assessmentPolicy.hasChoice) {
+        u.question2Parts.forEach((p) => {
+          totalSubParts += 1;
+          if (p.selectedQuestion) assignedSubParts += 1;
+        });
+      }
     });
 
     return {
@@ -758,7 +806,7 @@ export function GeneratePaper() {
       assignedSubParts,
       percentage: totalSubParts > 0 ? Math.round((assignedSubParts / totalSubParts) * 100) : 0,
     };
-  }, [unitsConfig]);
+  }, [unitsConfig, assessmentPolicy.hasChoice]);
 
   // Convert builder state to PaperUnit format for Preview & DOCX
   const buildPaperUnits = (): PaperUnit[] => {
@@ -766,6 +814,8 @@ export function GeneratePaper() {
       const q1Parts = u.question1Parts.map((p) => ({
         text: p.selectedQuestion?.text || `[Question for (${p.label}) - ${p.marks}M, ${p.bloomLevel}, ${p.co}]`,
         marks: p.selectedQuestion?.marks || (typeof p.marks === "number" ? p.marks : Number(p.marks) || 0),
+        options: p.selectedQuestion?.options,
+        correctOption: p.selectedQuestion?.correctOption,
         bloomsLevel: p.selectedQuestion?.bloomLevel || (p.bloomLevel === "Any" ? "BL2" : p.bloomLevel),
         co: p.selectedQuestion?.co || (p.co === "Any" ? `CO${u.unitNumber}` : p.co),
         po: p.selectedQuestion?.po || (p.po === "Any" ? "PO1" : p.po),
@@ -775,6 +825,8 @@ export function GeneratePaper() {
       const q2Parts = u.question2Parts.map((p) => ({
         text: p.selectedQuestion?.text || `[Question for (${p.label}) - ${p.marks}M, ${p.bloomLevel}, ${p.co}]`,
         marks: p.selectedQuestion?.marks || (typeof p.marks === "number" ? p.marks : Number(p.marks) || 0),
+        options: p.selectedQuestion?.options,
+        correctOption: p.selectedQuestion?.correctOption,
         bloomsLevel: p.selectedQuestion?.bloomLevel || (p.bloomLevel === "Any" ? "BL2" : p.bloomLevel),
         co: p.selectedQuestion?.co || (p.co === "Any" ? `CO${u.unitNumber}` : p.co),
         po: p.selectedQuestion?.po || (p.po === "Any" ? "PO1" : p.po),
@@ -788,11 +840,11 @@ export function GeneratePaper() {
           {
             number: u.question1Number,
             parts: q1Parts,
-            hasOr: true,
-            orQuestion: {
+            hasOr: assessmentPolicy.hasChoice,
+            ...(assessmentPolicy.hasChoice ? { orQuestion: {
               number: u.question2Number,
               parts: q2Parts,
-            },
+            } } : {}),
           },
         ],
       };
@@ -823,7 +875,7 @@ export function GeneratePaper() {
       if (unselectedQ1 > 0) {
         issues.push(`Unit ${u.unitNumber} (Question ${u.question1Number}) has ${unselectedQ1} unassigned sub-part${unselectedQ1 > 1 ? "s" : ""}.`);
       }
-      if (unselectedQ2 > 0) {
+      if (assessmentPolicy.hasChoice && unselectedQ2 > 0) {
         issues.push(`Unit ${u.unitNumber} (Question ${u.question2Number}) has ${unselectedQ2} unassigned sub-part${unselectedQ2 > 1 ? "s" : ""}.`);
       }
       if (q1Marks > maxMarksPerUnit) {
@@ -831,14 +883,14 @@ export function GeneratePaper() {
       } else if (q1Marks !== maxMarksPerUnit) {
         issues.push(`Unit ${u.unitNumber} (Question ${u.question1Number}) has ${q1Marks}/${maxMarksPerUnit} marks assigned.`);
       }
-      if (q2Marks > maxMarksPerUnit) {
+      if (assessmentPolicy.hasChoice && q2Marks > maxMarksPerUnit) {
         issues.push(`Unit ${u.unitNumber} (Question ${u.question2Number}) EXCEEDS the ${maxMarksPerUnit} Marks limit with ${q2Marks}/${maxMarksPerUnit} marks.`);
-      } else if (q2Marks !== maxMarksPerUnit) {
+      } else if (assessmentPolicy.hasChoice && q2Marks !== maxMarksPerUnit) {
         issues.push(`Unit ${u.unitNumber} (Question ${u.question2Number}) has ${q2Marks}/${maxMarksPerUnit} marks assigned.`);
       }
     });
     return issues;
-  }, [unitsConfig, maxMarksPerUnit]);
+  }, [unitsConfig, maxMarksPerUnit, assessmentPolicy.hasChoice]);
 
   // Finalize Paper and Open Preview
   const handleFinalizeAndPreview = () => {
@@ -864,7 +916,7 @@ export function GeneratePaper() {
         );
         return;
       }
-      if (q2Marks > maxMarksPerUnit) {
+      if (assessmentPolicy.hasChoice && q2Marks > maxMarksPerUnit) {
         alert(
           `Cannot proceed: Unit ${u.unitNumber} Question ${u.question2Number} has ${q2Marks} Marks, exceeding the ${maxMarksPerUnit} Marks threshold. Please adjust sub-parts so the total does not exceed ${maxMarksPerUnit} Marks.`
         );
@@ -874,12 +926,16 @@ export function GeneratePaper() {
 
     const paperUnits = buildPaperUnits();
     const newPaper: Omit<PaperRecord, "id" | "createdAt"> = {
-      title: examTitle || "Supplementary Semester B.E. Information Sc. and Engg. Examinations, Aug-Sept. 2025",
+      title: examTitle || `${assessmentPolicy.label} ${testNumber}`,
       subjectId: selectedSubjectId || "DS-S3IS01",
       subjectName: subjectName || "Data Structures / Data Structures and Applications",
       courseCode: courseCode || "S3IS01/3RIS02",
       semester: semester || "III Semester",
       examType: examType || "SEE",
+      assessmentKind,
+      assessmentVariant: assessmentKind === "TEST" ? `Test ${testNumber}` : undefined,
+      hasChoice: assessmentPolicy.hasChoice,
+      questionType: assessmentPolicy.questionType,
       totalMarks: totalMarks,
       duration: duration,
       date: examSession || "Aug-Sept. 2025",
@@ -980,8 +1036,30 @@ export function GeneratePaper() {
               </div>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200 self-start sm:self-auto">
                 <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>5-Unit Choice Format</span>
+                <span>{assessmentPolicy.hasChoice ? "Choice format" : "No-choice format"}</span>
               </span>
+            </div>
+
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+              <label className="block text-xs font-bold uppercase tracking-wider text-indigo-800">Assessment type</label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {(["SEE", "TEST", "QUIZ"] as AssessmentKind[]).map((kind) => {
+                  const policy = getAssessmentPolicy(kind);
+                  return (
+                    <button key={kind} type="button" onClick={() => handleAssessmentKindChange(kind)}
+                      className={`rounded-lg border px-3 py-3 text-left ${assessmentKind === kind ? "border-indigo-600 bg-white shadow-sm" : "border-indigo-100 bg-white/60"}`}>
+                      <span className="block text-sm font-semibold">{policy.label}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{policy.totalMarks} marks · {policy.hasChoice ? "choice allowed" : "no choice"} · {policy.questionType === "mcq" ? "MCQ" : "descriptive"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {assessmentKind === "TEST" && (
+                <div className="mt-3 flex items-center gap-3 text-sm">
+                  <span className="font-medium text-slate-700">Test paper</span>
+                  {[1, 2].map((number) => <button key={number} type="button" onClick={() => setTestNumber(number as 1 | 2)} className={`rounded-md px-3 py-1.5 ${testNumber === number ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>Test {number}</button>)}
+                </div>
+              )}
             </div>
 
             {/* Section 1: Examination Session & Academic Info */}
@@ -1154,17 +1232,17 @@ export function GeneratePaper() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      min={10}
-                      max={200}
+                      min={assessmentKind === "SEE" ? 10 : assessmentPolicy.totalMarks}
+                      max={assessmentKind === "SEE" ? 200 : assessmentPolicy.totalMarks}
                       step={5}
-                      value={totalMarks}
+                      value={assessmentKind === "SEE" ? totalMarks : assessmentPolicy.totalMarks}
                       onChange={(e) => handleTotalMarksChange(Number(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <span className="text-xs font-semibold text-slate-500">Marks</span>
                   </div>
                   <div className="flex items-center gap-1.5 pt-1">
-                    {[100, 50, 75].map((preset) => (
+                    {(assessmentKind === "SEE" ? [100, 50, 75] : [assessmentPolicy.totalMarks]).map((preset) => (
                       <button
                         key={preset}
                         type="button"
@@ -1192,17 +1270,17 @@ export function GeneratePaper() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      min={5}
-                      max={50}
+                      min={assessmentKind === "QUIZ" ? 1 : 5}
+                      max={assessmentKind === "QUIZ" ? 4 : assessmentKind === "TEST" ? 10 : 50}
                       step={1}
-                      value={maxMarksPerUnit}
+                      value={assessmentKind === "SEE" ? maxMarksPerUnit : assessmentKind === "TEST" ? 10 : 4}
                       onChange={(e) => handleMaxMarksPerUnitChange(Number(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <span className="text-xs font-semibold text-slate-500">M / Unit</span>
                   </div>
                   <div className="flex items-center gap-1.5 pt-1">
-                    {[20, 10, 15].map((preset) => (
+                    {(assessmentKind === "SEE" ? [20, 10, 15] : [assessmentKind === "TEST" ? 10 : 4]).map((preset) => (
                       <button
                         key={preset}
                         type="button"
@@ -1301,7 +1379,7 @@ export function GeneratePaper() {
                 title="Auto-fill empty slots using matching questions from bank"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Auto-Fill Matching</span>
+                <span>AI Assign Questions</span>
               </button>
 
               <button
@@ -1600,7 +1678,7 @@ export function GeneratePaper() {
                       {/* ========================================= */}
                       {/* "OR" SEPARATOR */}
                       {/* ========================================= */}
-                      <div className="relative py-2 flex items-center justify-center">
+                      <div className={`relative py-2 flex items-center justify-center ${assessmentPolicy.hasChoice ? "" : "hidden"}`}>
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t-2 border-dashed border-slate-200"></div>
                         </div>
@@ -1612,7 +1690,7 @@ export function GeneratePaper() {
                       {/* ========================================= */}
                       {/* QUESTION 2 (e.g. Q2, Q4, Q6, Q8, Q10) */}
                       {/* ========================================= */}
-                      <div className="space-y-4">
+                      <div className={`space-y-4 ${assessmentPolicy.hasChoice ? "" : "hidden"}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-slate-900 font-mono">

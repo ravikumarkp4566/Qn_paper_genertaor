@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import {
   FileText,
   Clock,
@@ -7,10 +7,22 @@ import {
   Database,
   Sparkles,
   GraduationCap,
+  LogOut,
 } from "lucide-react";
+import { useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!user) navigate("/login", { replace: true });
+    else if (user.role === "platform_admin") navigate("/platform-admin", { replace: true });
+  }, [navigate, user]);
+
+  if (!user || user.role === "platform_admin") return null;
 
   const navItems = [
     { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -42,7 +54,7 @@ export function Layout() {
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-300">
           <GraduationCap className="w-4 h-4 text-indigo-400" />
-          <span>Faculty</span>
+          <span>{user.name}</span>
         </div>
       </header>
 
@@ -92,9 +104,17 @@ export function Layout() {
               FA
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-white truncate">Dr. Faculty Member</p>
-              <p className="text-[11px] text-slate-400 truncate">Department of CSE</p>
+              <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+              <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
             </div>
+            <button
+              type="button"
+              title="Sign out"
+              onClick={() => { signOut(); navigate("/login", { replace: true }); }}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>

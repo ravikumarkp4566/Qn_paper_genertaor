@@ -10,6 +10,7 @@ import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 interface QuestionPart {
   text: string;
   marks: number;
+  options?: string[];
   bloomsLevel: string; // Bloom's Level
   co?: string;
   po: string;
@@ -452,6 +453,11 @@ export function Preview() {
                                     </td>
                                     <td className="p-2 pr-4 text-justify leading-relaxed text-slate-900">
                                       {part.text}
+                                      {part.options && (
+                                        <ol className="mt-2 grid gap-1 pl-5 text-left text-sm sm:grid-cols-2" type="A">
+                                          {part.options.map((option) => <li key={option}>{option}</li>)}
+                                        </ol>
+                                      )}
                                     </td>
                                     <td className="py-2 px-1 w-8 text-center font-bold text-slate-900">{part.marks}</td>
                                     <td className="py-2 px-1 w-8 text-center font-semibold text-slate-700">{(part.bloomsLevel || "BL1").replace('BL', '')}</td>
@@ -486,6 +492,11 @@ export function Preview() {
                                         </td>
                                         <td className="p-2 pr-4 text-justify leading-relaxed text-slate-900">
                                           {part.text}
+                                          {part.options && (
+                                            <ol className="mt-2 grid gap-1 pl-5 text-left text-sm sm:grid-cols-2" type="A">
+                                              {part.options.map((option) => <li key={option}>{option}</li>)}
+                                            </ol>
+                                          )}
                                         </td>
                                         <td className="py-2 px-1 w-8 text-center font-bold text-slate-900">{part.marks}</td>
                                         <td className="py-2 px-1 w-8 text-center font-semibold text-slate-700">{(part.bloomsLevel || "BL1").replace('BL', '')}</td>

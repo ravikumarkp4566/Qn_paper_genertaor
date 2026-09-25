@@ -8,6 +8,8 @@ export interface Question {
   co: string;
   po: string;
   pso: string;
+  options?: string[];
+  correctOption?: number;
   difficulty?: "Easy" | "Medium" | "Hard" | string;
   createdAt?: string;
   updatedAt?: string;

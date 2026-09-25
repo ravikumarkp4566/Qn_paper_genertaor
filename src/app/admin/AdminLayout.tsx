@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { Activity, Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from "lucide-react";
+import { Activity, Building2, LayoutDashboard, LogOut, ShieldCheck, Users, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 
@@ -20,6 +20,8 @@ export function AdminLayout() {
     { path: "/platform-admin/workspaces", label: "Workspaces", icon: Building2 },
     { path: "/platform-admin/users", label: "Users & access", icon: Users },
     { path: "/platform-admin/audit-log", label: "Audit log", icon: Activity },
+    { path: "/platform-admin/assessment-settings", label: "Assessment fields", icon: ShieldCheck },
+    { path: "/platform-admin/generate", label: "Generate paper", icon: Sparkles },
   ];
 
   return (

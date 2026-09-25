@@ -6,8 +6,14 @@ import { QuestionBank } from "./pages/QuestionBank";
 import { GeneratePaper } from "./pages/GeneratePaper";
 import { Preview } from "./pages/Preview";
 import { History } from "./pages/History";
+import { Login } from "./pages/Login";
+import { AdminLayout } from "./admin/AdminLayout";
+import { AdminDashboard } from "./admin/AdminDashboard";
+import { AdminSection } from "./admin/AdminSection";
+import { GeneratePaper as AdminGeneratePaper } from "./pages/GeneratePaper";
 
 export const router = createBrowserRouter([
+  { path: "/login", Component: Login },
   {
     path: "/",
     Component: Layout,
@@ -22,6 +28,18 @@ export const router = createBrowserRouter([
       { path: "preview/:id", Component: Preview },
       { path: "history", Component: History },
       { path: "configure", element: <Navigate to="/generate" replace /> },
+    ],
+  },
+  {
+    path: "/platform-admin",
+    Component: AdminLayout,
+    children: [
+      { index: true, Component: AdminDashboard },
+      { path: "workspaces", Component: AdminSection },
+      { path: "users", Component: AdminSection },
+      { path: "audit-log", Component: AdminSection },
+      { path: "assessment-settings", Component: AdminSection },
+      { path: "generate", Component: AdminGeneratePaper },
     ],
   },
   {

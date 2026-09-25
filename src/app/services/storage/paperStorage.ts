@@ -17,6 +17,8 @@ export interface PaperRequirement {
 export interface PaperPart {
   text: string;
   marks: number;
+  options?: string[];
+  correctOption?: number;
   bloomsLevel: string;
   co: string;
   po: string;
@@ -47,6 +49,10 @@ export interface PaperRecord {
   courseCode: string;
   semester: string;
   examType: "SEE" | "TEST" | "QUIZ" | "CUSTOM" | string;
+  assessmentKind?: "SEE" | "TEST" | "QUIZ";
+  assessmentVariant?: string;
+  hasChoice?: boolean;
+  questionType?: "descriptive" | "mcq";
   totalMarks: number;
   duration: number;
   date: string;

@@ -49,22 +49,20 @@ const demoUsers = [
   },
 ];
 
-const readSession = (): Session => {
-  const defaultFacultySession: Session = {
-    user: demoUsers[0].user,
-    expiresAt: Date.now() + SESSION_LENGTH_MS,
-  };
+const readSession = (): Session | null => {
   const rawSession = localStorage.getItem(SESSION_KEY);
-  if (!rawSession) return defaultFacultySession;
+  if (!rawSession) return null;
 
   try {
     const session = JSON.parse(rawSession) as Session;
     if (!session.user || session.expiresAt <= Date.now()) {
-      return defaultFacultySession;
+      localStorage.removeItem(SESSION_KEY);
+      return null;
     }
     return session;
   } catch {
-    return defaultFacultySession;
+    localStorage.removeItem(SESSION_KEY);
+    return null;
   }
 };
 
