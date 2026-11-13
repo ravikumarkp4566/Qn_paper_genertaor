@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { collegeHeader } from "../services/dataStore";
 import { useParams, Link } from "react-router";
 import { Download, RefreshCw, Edit, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { generateSamplePaper, generateQuestionPaperDOCX } from "../utils/docxGenerator";
 import { getPaperById, PaperRecord } from "../services/storage/paperStorage";
 import { getQuestions } from "../services/storage/questionStorage";
-import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 
 interface QuestionPart {
   text: string;
@@ -37,7 +37,7 @@ export function Preview() {
   const { id } = useParams<{ id: string }>();
   const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
   const [paperDetails, setPaperDetails] = useState<Partial<PaperRecord>>({
-    universityName: "Siddaganga Institute of Technology, Tumakuru-572 103",
+    universityName: collegeHeader().institute,
     title: "Even Semester B.E. Examinations, June/July 2025",
     subjectName: "Data Structures",
     courseCode: "DS-S3IS01",
@@ -132,7 +132,7 @@ export function Preview() {
         setUnits(saved.units);
         setPaperDetails({
           ...saved,
-          universityName: saved.universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
+          universityName: saved.universityName || collegeHeader().institute,
           title: saved.title || "Semester End Examinations",
           subjectName: saved.subjectName,
           courseCode: saved.courseCode,
@@ -153,7 +153,7 @@ export function Preview() {
           setUnits(parsed.units);
           setPaperDetails({
             ...parsed,
-            universityName: parsed.universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
+            universityName: parsed.universityName || collegeHeader().institute,
             title: parsed.title || "Semester End Examinations",
             subjectName: parsed.subjectName,
             courseCode: parsed.courseCode,
@@ -300,8 +300,8 @@ export function Preview() {
                 }));
 
                 generateQuestionPaperDOCX({
-                  universityName: paperDetails.universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
-                  affiliationSubtext: paperDetails.affiliationSubtext || "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)",
+                  universityName: paperDetails.universityName || collegeHeader().institute,
+                  affiliationSubtext: paperDetails.affiliationSubtext || collegeHeader().affiliation,
                   examTitle: paperDetails.title || "Supplementary Semester B.E. Information Sc. and Engg. Examinations, Aug-Sept. 2025",
                   program: paperDetails.degreeName || "B.E.",
                   departmentName: paperDetails.departmentName || "Information Sc. and Engg.",
@@ -310,7 +310,7 @@ export function Preview() {
                   date: paperDetails.date || "Aug-Sept. 2025",
                   time: `${Math.floor((paperDetails.duration || 180) / 60)} Hours`,
                   maxMarks: `${paperDetails.totalMarks || 100}`,
-                  usnPrefix: paperDetails.usnPrefix || "1SI",
+                  usnPrefix: paperDetails.usnPrefix || collegeHeader().usnPrefix,
                   instructions: paperDetails.instructions || [
                     "Revealing of Identity in any form in the answer book will be treated as malpractice.",
                     "Answer any five questions choosing one full question from each unit."
@@ -337,7 +337,7 @@ export function Preview() {
                 <span className="font-extrabold text-sm tracking-wider text-slate-900 font-mono">USN</span>
                 <div className="inline-flex border-2 border-slate-900 divide-x-2 divide-slate-900 bg-white">
                   {Array.from({ length: 10 }).map((_, idx) => {
-                    const prefix = (paperDetails.usnPrefix || "1SI").padEnd(3, " ");
+                    const prefix = (paperDetails.usnPrefix || collegeHeader().usnPrefix).padEnd(3, " ");
                     const char = idx < 3 ? prefix[idx] : "";
                     return (
                       <div
@@ -353,17 +353,19 @@ export function Preview() {
 
               {/* Center: Logo + University Name + Affiliation */}
               <div className="col-span-12 sm:col-span-6 flex items-center justify-center gap-3 text-center">
-                <img
-                  src={SIT_LOGO_DATA_URL}
-                  alt="SIT Logo"
-                  className="w-14 h-14 sm:w-16 sm:h-16 object-contain shrink-0"
-                />
+                {collegeHeader().logoUrl && (
+                  <img
+                    src={collegeHeader().logoUrl!}
+                    alt="College logo"
+                    className="w-14 h-14 sm:w-16 sm:h-16 object-contain shrink-0"
+                  />
+                )}
                 <div>
                   <h2 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight leading-tight">
-                    {paperDetails.universityName || "Siddaganga Institute of Technology, Tumakuru-572 103"}
+                    {paperDetails.universityName || collegeHeader().institute}
                   </h2>
                   <p className="text-[10px] sm:text-[11px] text-slate-700 italic mt-0.5 leading-snug">
-                    {paperDetails.affiliationSubtext || "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)"}
+                    {paperDetails.affiliationSubtext || collegeHeader().affiliation}
                   </p>
                 </div>
               </div>

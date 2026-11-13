@@ -6,6 +6,7 @@ import {
   BookOpen,
   Database,
   Sparkles,
+  Sigma,
   GraduationCap,
   LogOut,
 } from "lucide-react";
@@ -29,6 +30,7 @@ export function Layout() {
     { path: "/subjects", icon: BookOpen, label: "Subjects" },
     { path: "/question-bank", icon: Database, label: "Question Bank" },
     { path: "/generate", icon: Sparkles, label: "Generate Paper" },
+    { path: "/latex-paper", icon: Sigma, label: "LaTeX Paper" },
     { path: "/history", icon: Clock, label: "History" },
   ];
 

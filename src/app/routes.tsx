@@ -7,6 +7,7 @@ import { GeneratePaper } from "./pages/GeneratePaper";
 import { Preview } from "./pages/Preview";
 import { History } from "./pages/History";
 import { Login } from "./pages/Login";
+import { LatexPaper } from "./pages/LatexPaper";
 import { AdminLayout } from "./admin/AdminLayout";
 import { AdminDashboard } from "./admin/AdminDashboard";
 import { AdminSection } from "./admin/AdminSection";
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "generate", Component: GeneratePaper },
       { path: "preview", Component: Preview },
       { path: "preview/:id", Component: Preview },
+      { path: "latex-paper/:id?", Component: LatexPaper },
       { path: "history", Component: History },
       { path: "configure", element: <Navigate to="/generate" replace /> },
     ],

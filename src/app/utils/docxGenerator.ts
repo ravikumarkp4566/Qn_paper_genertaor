@@ -14,7 +14,7 @@ import {
   ImageRun,
 } from "docx";
 import { saveAs } from "file-saver";
-import { SIT_LOGO_BASE64 } from "../assets/sitLogo";
+import { cache, collegeHeader } from "../services/dataStore";
 
 interface QuestionPart {
   text: string;
@@ -62,17 +62,13 @@ function isOrQuestion(item: Question | OrQuestion): item is OrQuestion {
 }
 
 function createHeaderSection(data: PaperData) {
-  // Convert SIT_LOGO_BASE64 to Uint8Array for docx ImageRun
+  // The college logo from the database, loaded at sign-in.
   let sitLogoImage: ImageRun | null = null;
   try {
-    const binaryString = atob(SIT_LOGO_BASE64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    if (!cache.logoBytes) throw new Error("This college has no logo");
     sitLogoImage = new ImageRun({
-      data: bytes,
+      type: "jpg",
+      data: cache.logoBytes,
       transformation: {
         width: 44,
         height: 44,
@@ -82,7 +78,7 @@ function createHeaderSection(data: PaperData) {
     console.warn("Could not load SIT logo in docx", e);
   }
 
-  const usnPrefixStr = (data.usnPrefix || "1SI").padEnd(3, " ");
+  const usnPrefixStr = (data.usnPrefix || collegeHeader().usnPrefix).padEnd(3, " ");
   // 10 cells for USN box
   const usnCells: TableCell[] = Array.from({ length: 10 }).map((_, idx) => {
     const char = idx < 3 ? usnPrefixStr[idx] : "";
@@ -167,7 +163,7 @@ function createHeaderSection(data: PaperData) {
                   new TextRun({
                     text:
                       data.universityName ||
-                      "Siddaganga Institute of Technology, Tumakuru-572 103",
+                      collegeHeader().institute,
                     bold: true,
                     size: 20,
                   }),
@@ -180,7 +176,7 @@ function createHeaderSection(data: PaperData) {
                   new TextRun({
                     text:
                       data.affiliationSubtext ||
-                      "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)",
+                      collegeHeader().affiliation,
                     italics: true,
                     size: 14,
                     color: "333333",

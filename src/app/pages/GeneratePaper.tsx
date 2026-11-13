@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { collegeHeader } from "../services/dataStore";
 import { useNavigate } from "react-router";
 import {
   ArrowRight,
@@ -28,12 +29,13 @@ import {
 } from "../config/academicOptions";
 import { getSubjects, Subject } from "../services/storage/subjectStorage";
 import { getQuestions, Question } from "../services/storage/questionStorage";
+import { createLatexPaperFromGenerated } from "../services/storage/latexPaperStorage";
+import { QuestionText } from "../latex/QuestionText";
 import {
   savePaper,
   PaperRecord,
   PaperUnit,
 } from "../services/storage/paperStorage";
-import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 import {
   AssessmentKind,
   getAssessmentPolicy,
@@ -88,12 +90,12 @@ export function GeneratePaper() {
   const [maxMarksPerUnit, setMaxMarksPerUnit] = useState<number>(20);
   const [duration, setDuration] = useState<number>(180);
   const [universityName, setUniversityName] = useState<string>(
-    "Siddaganga Institute of Technology, Tumakuru-572 103"
+    collegeHeader().institute
   );
   const [affiliationSubtext, setAffiliationSubtext] = useState<string>(
-    "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)"
+    collegeHeader().affiliation
   );
-  const [usnPrefix, setUsnPrefix] = useState<string>("1SI");
+  const [usnPrefix, setUsnPrefix] = useState<string>(() => collegeHeader().usnPrefix);
   const [mobilePhonesProhibited, setMobilePhonesProhibited] = useState<boolean>(true);
   const [instruction1, setInstruction1] = useState<string>(
     "Revealing of Identity in any form in the answer book will be treated as malpractice."
@@ -813,6 +815,9 @@ export function GeneratePaper() {
     return unitsConfig.map((u) => {
       const q1Parts = u.question1Parts.map((p) => ({
         text: p.selectedQuestion?.text || `[Question for (${p.label}) - ${p.marks}M, ${p.bloomLevel}, ${p.co}]`,
+        questionId: p.selectedQuestion?.id,
+        format: p.selectedQuestion?.format,
+        images: p.selectedQuestion?.images,
         marks: p.selectedQuestion?.marks || (typeof p.marks === "number" ? p.marks : Number(p.marks) || 0),
         options: p.selectedQuestion?.options,
         correctOption: p.selectedQuestion?.correctOption,
@@ -824,6 +829,9 @@ export function GeneratePaper() {
 
       const q2Parts = u.question2Parts.map((p) => ({
         text: p.selectedQuestion?.text || `[Question for (${p.label}) - ${p.marks}M, ${p.bloomLevel}, ${p.co}]`,
+        questionId: p.selectedQuestion?.id,
+        format: p.selectedQuestion?.format,
+        images: p.selectedQuestion?.images,
         marks: p.selectedQuestion?.marks || (typeof p.marks === "number" ? p.marks : Number(p.marks) || 0),
         options: p.selectedQuestion?.options,
         correctOption: p.selectedQuestion?.correctOption,
@@ -892,6 +900,8 @@ export function GeneratePaper() {
     return issues;
   }, [unitsConfig, maxMarksPerUnit, assessmentPolicy.hasChoice]);
 
+  const [creatingPaper, setCreatingPaper] = useState(false);
+
   // Finalize Paper and Open Preview
   const handleFinalizeAndPreview = () => {
     // Strict threshold check: ensure no question exceeds maxMarksPerUnit
@@ -939,9 +949,9 @@ export function GeneratePaper() {
       totalMarks: totalMarks,
       duration: duration,
       date: examSession || "Aug-Sept. 2025",
-      universityName: universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
-      affiliationSubtext: affiliationSubtext || "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)",
-      usnPrefix: usnPrefix || "1SI",
+      universityName: universityName || collegeHeader().institute,
+      affiliationSubtext: affiliationSubtext || collegeHeader().affiliation,
+      usnPrefix: usnPrefix || collegeHeader().usnPrefix,
       departmentName: departmentName || "Information Sc. and Engg.",
       degreeName: degreeName || "B.E.",
       maxMarksPerUnit: maxMarksPerUnit,
@@ -954,9 +964,29 @@ export function GeneratePaper() {
       units: paperUnits,
     };
 
-    const saved = savePaper(newPaper);
-    localStorage.setItem("activeGeneratedPaper", JSON.stringify(saved));
-    navigate(`/preview/${saved.id}`);
+    // The paper opens in the LaTeX editor for any last changes, with its questions' images.
+    setCreatingPaper(true);
+    createLatexPaperFromGenerated({
+      examTitle: newPaper.title,
+      subjectName: newPaper.subjectName,
+      courseCode: newPaper.courseCode,
+      semester: newPaper.semester,
+      examDate: newPaper.date,
+      duration: newPaper.duration,
+      totalMarks: newPaper.totalMarks,
+      instructions: newPaper.instructions ?? [],
+      units: newPaper.units.map((unit) => ({
+        unitNumber: unit.unitNumber,
+        questions: unit.questions.map((question) => ({
+          number: question.number,
+          parts: question.parts,
+          orQuestion: question.hasOr ? question.orQuestion : undefined,
+        })),
+      })),
+    })
+      .then((id) => navigate(`/latex-paper/${id}`))
+      .catch((error: unknown) => alert(`Could not create the paper: ${error instanceof Error ? error.message : "server error"}`))
+      .finally(() => setCreatingPaper(false));
   };
 
   return (
@@ -1895,7 +1925,7 @@ export function GeneratePaper() {
                           <div className="flex-1">
                             <span className="font-bold text-slate-700 mr-2">{p.label})</span>
                             {p.selectedQuestion ? (
-                              <span className="text-slate-800">{p.selectedQuestion.text}</span>
+                              <span className="text-slate-800"><QuestionText question={p.selectedQuestion} /></span>
                             ) : (
                               <span className="text-amber-600 italic">
                                 [No question selected - Planned criteria: {p.marks}M, {p.bloomLevel}, {p.co}]
@@ -1931,7 +1961,7 @@ export function GeneratePaper() {
                           <div className="flex-1">
                             <span className="font-bold text-slate-700 mr-2">{p.label})</span>
                             {p.selectedQuestion ? (
-                              <span className="text-slate-800">{p.selectedQuestion.text}</span>
+                              <span className="text-slate-800"><QuestionText question={p.selectedQuestion} /></span>
                             ) : (
                               <span className="text-amber-600 italic">
                                 [No question selected - Planned criteria: {p.marks}M, {p.bloomLevel}, {p.co}]
@@ -2067,10 +2097,11 @@ export function GeneratePaper() {
 
               <button
                 onClick={handleFinalizeAndPreview}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
+                disabled={creatingPaper}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm shadow-indigo-500/20 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-70"
               >
                 <Eye className="w-4 h-4" />
-                <span>Open Paper Preview & Export DOCX</span>
+                <span>{creatingPaper ? "Creating paper…" : "Open in LaTeX editor & export DOCX"}</span>
               </button>
             </div>
           </div>
@@ -2197,9 +2228,9 @@ export function GeneratePaper() {
                           )}
                         </div>
 
-                        <p className="text-xs text-slate-800 leading-relaxed font-normal">
-                          {q.text}
-                        </p>
+                        <div className="text-xs text-slate-800 leading-relaxed font-normal">
+                          <QuestionText question={q} />
+                        </div>
                       </div>
 
                       <div className="shrink-0 pt-1">
@@ -2618,7 +2649,7 @@ function SubPartCard({
                 className="text-xs text-slate-800 leading-relaxed font-normal hover:bg-slate-50 p-1 rounded transition-colors cursor-text group flex items-start justify-between"
                 title="Click to edit question text directly"
               >
-                <span>{part.selectedQuestion.text}</span>
+                <span><QuestionText question={part.selectedQuestion} /></span>
               </p>
             )}
           </div>

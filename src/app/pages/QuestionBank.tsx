@@ -33,6 +33,10 @@ import {
   Question,
 } from "../services/storage/questionStorage";
 import { getSubjects, Subject } from "../services/storage/subjectStorage";
+import { newQuestionIdForForm } from "../services/storage/questionStorage";
+import { deleteQuestionImage } from "../services/questionImages";
+import { QuestionLatexEditor, plainTextToLatex } from "../latex/QuestionLatexEditor";
+import { QuestionText } from "../latex/QuestionText";
 
 export function QuestionBank() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,6 +63,9 @@ export function QuestionBank() {
   const [formSubjectId, setFormSubjectId] = useState("");
   const [formUnit, setFormUnit] = useState<number>(1);
   const [formText, setFormText] = useState("");
+  // The form knows the question's id up front so images can be uploaded before the first save.
+  const [formQuestionId, setFormQuestionId] = useState("");
+  const [formImages, setFormImages] = useState<string[]>([]);
   const [formMarks, setFormMarks] = useState<number>(10);
   const [formBL, setFormBL] = useState<string>("BL2");
   const [formCO, setFormCO] = useState<string>("CO1");
@@ -143,6 +150,8 @@ export function QuestionBank() {
     setFormSubjectId(selectedSubjectId);
     setFormUnit(1);
     setFormText("");
+    setFormQuestionId(newQuestionIdForForm());
+    setFormImages([]);
     setFormMarks(10);
     setFormBL("BL2");
     setFormCO("CO1");
@@ -157,7 +166,10 @@ export function QuestionBank() {
     setEditingQuestion(q);
     setFormSubjectId(q.subjectId);
     setFormUnit(q.unit);
-    setFormText(q.text);
+    // Older questions are plain text; edit them as LaTeX from now on.
+    setFormText(q.format === "latex" ? q.text : plainTextToLatex(q.text));
+    setFormQuestionId(q.id);
+    setFormImages(q.images ?? []);
     setFormMarks(q.marks);
     setFormBL(q.bloomLevel);
     setFormCO(q.co);
@@ -177,6 +189,8 @@ export function QuestionBank() {
         subjectId: formSubjectId,
         unit: Number(formUnit),
         text: formText.trim(),
+        format: "latex",
+        images: formImages,
         marks: Number(formMarks),
         bloomLevel: formBL,
         co: formCO,
@@ -186,9 +200,12 @@ export function QuestionBank() {
       });
     } else {
       addQuestion({
+        id: formQuestionId,
         subjectId: formSubjectId,
         unit: Number(formUnit),
         text: formText.trim(),
+        format: "latex",
+        images: formImages,
         marks: Number(formMarks),
         bloomLevel: formBL,
         co: formCO,
@@ -200,6 +217,14 @@ export function QuestionBank() {
 
     setIsQuestionModalOpen(false);
     refreshQuestions();
+  };
+
+  // Closing without saving a new question discards the images uploaded for it.
+  const closeQuestionModal = () => {
+    if (!editingQuestion) {
+      formImages.forEach((name) => void deleteQuestionImage(formQuestionId, name).catch(() => undefined));
+    }
+    setIsQuestionModalOpen(false);
   };
 
   // Delete question
@@ -635,7 +660,7 @@ export function QuestionBank() {
                       {q.id}
                     </td>
                     <td className="py-2.5 px-3 text-slate-800 text-xs font-normal leading-relaxed">
-                      {q.text}
+                      <QuestionText question={q} />
                     </td>
                     <td className="py-2.5 px-2.5 text-center text-slate-700 font-medium">
                       U{q.unit}
@@ -756,13 +781,13 @@ export function QuestionBank() {
       {/* Add / Edit Question Modal */}
       {isQuestionModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-3xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h2 className="font-semibold text-slate-900 text-base">
                 {editingQuestion ? `Edit Question (${editingQuestion.id})` : "Add Question"}
               </h2>
               <button
-                onClick={() => setIsQuestionModalOpen(false)}
+                onClick={closeQuestionModal}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -813,13 +838,12 @@ export function QuestionBank() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Question Statement <span className="text-rose-500">*</span>
                 </label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Type the full exam question statement here..."
+                <QuestionLatexEditor
+                  questionId={formQuestionId}
                   value={formText}
-                  onChange={(e) => setFormText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all leading-relaxed"
+                  onChange={setFormText}
+                  images={formImages}
+                  onImagesChange={setFormImages}
                 />
               </div>
 
@@ -934,7 +958,7 @@ export function QuestionBank() {
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsQuestionModalOpen(false)}
+                  onClick={closeQuestionModal}
                   className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
                 >
                   Cancel
