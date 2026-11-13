@@ -1,3 +1,9 @@
+// Subjects, stored in the database (collection "subjects").
+// Reads come from the copy loaded at sign-in; each change is sent to the server.
+
+import { api, saveInBackground } from "../api";
+import { cache } from "../dataStore";
+
 export interface Subject {
   subjectId: string;
   subjectName: string;
@@ -9,112 +15,52 @@ export interface Subject {
   updatedAt?: string;
 }
 
-const STORAGE_KEY = "qpgen_subjects_v2";
+const sameId = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-export const INITIAL_SUBJECTS: Subject[] = [
-  {
-    subjectId: "DS-S3IS01",
-    subjectName: "Data Structures / Data Structures and Applications",
-    courseCode: "S3IS01/3RIS02",
-    semester: "III Semester",
-    numberOfUnits: 5,
-    description: "Structures, file functions, stacks, queues, linked lists, and tree data structures.",
-    createdAt: new Date().toISOString(),
-  },
-];
-
-function loadFromStorage(): Subject[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SUBJECTS));
-      return INITIAL_SUBJECTS;
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SUBJECTS));
-      return INITIAL_SUBJECTS;
-    }
-    // Ensure the subject is preserved with official name and course code
-    const updated = parsed.map((s) => {
-      if (s.subjectId === "DS-S3IS01") {
-        return {
-          ...s,
-          subjectName: "Data Structures / Data Structures and Applications",
-          courseCode: "S3IS01/3RIS02",
-          semester: s.semester || "III Semester",
-        };
-      }
-      return s;
-    });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    return updated;
-  } catch {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SUBJECTS));
-    return INITIAL_SUBJECTS;
-  }
-}
-
-function persistToStorage(subjects: Subject[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(subjects));
+function send(subject: Subject): void {
+  const { createdAt, updatedAt, ...body } = subject;
+  saveInBackground(api(`/subjects/${encodeURIComponent(subject.subjectId)}`, { method: "PUT", body }), "the subject");
 }
 
 export function getSubjects(): Subject[] {
-  return loadFromStorage();
+  return cache.subjects;
 }
 
 export function getSubjectById(subjectId: string): Subject | undefined {
-  const list = loadFromStorage();
-  return list.find(
-    (s) =>
-      s.subjectId.toLowerCase() === subjectId.toLowerCase() ||
-      s.courseCode.toLowerCase() === subjectId.toLowerCase()
-  );
+  return cache.subjects.find((s) => sameId(s.subjectId, subjectId) || sameId(s.courseCode ?? "", subjectId));
 }
 
 export function saveSubject(subject: Omit<Subject, "createdAt" | "updatedAt">): Subject {
-  const list = loadFromStorage();
   const now = new Date().toISOString();
-  const newSubject: Subject = {
+  const saved: Subject = {
     ...subject,
     subjectId: subject.subjectId.trim() || subject.courseCode.trim(),
-    createdAt: now,
     updatedAt: now,
   };
-
-  const existingIdx = list.findIndex(
-    (s) => s.subjectId.toLowerCase() === newSubject.subjectId.toLowerCase()
-  );
-
-  if (existingIdx >= 0) {
-    list[existingIdx] = { ...list[existingIdx], ...newSubject, updatedAt: now };
-  } else {
-    list.push(newSubject);
-  }
-
-  persistToStorage(list);
-  return newSubject;
+  const existing = cache.subjects.find((s) => sameId(s.subjectId, saved.subjectId));
+  saved.createdAt = existing?.createdAt ?? now;
+  cache.subjects = existing
+    ? cache.subjects.map((s) => (s === existing ? { ...existing, ...saved } : s))
+    : [...cache.subjects, saved];
+  send(saved);
+  return saved;
 }
 
 export function updateSubject(subjectId: string, updates: Partial<Subject>): Subject | null {
-  const list = loadFromStorage();
-  const idx = list.findIndex((s) => s.subjectId.toLowerCase() === subjectId.toLowerCase());
-  if (idx === -1) return null;
-
-  list[idx] = {
-    ...list[idx],
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  persistToStorage(list);
-  return list[idx];
+  const existing = cache.subjects.find((s) => sameId(s.subjectId, subjectId));
+  if (!existing) return null;
+  const updated: Subject = { ...existing, ...updates, subjectId: existing.subjectId, updatedAt: new Date().toISOString() };
+  cache.subjects = cache.subjects.map((s) => (s === existing ? updated : s));
+  send(updated);
+  return updated;
 }
 
+/** Deleting a subject also deletes its questions, on the server and here. */
 export function deleteSubject(subjectId: string): boolean {
-  const list = loadFromStorage();
-  const filtered = list.filter((s) => s.subjectId.toLowerCase() !== subjectId.toLowerCase());
-  if (filtered.length === list.length) return false;
-  persistToStorage(filtered);
+  const existing = cache.subjects.find((s) => sameId(s.subjectId, subjectId));
+  if (!existing) return false;
+  cache.subjects = cache.subjects.filter((s) => s !== existing);
+  cache.questions = cache.questions.filter((q) => !sameId(q.subjectId, existing.subjectId));
+  saveInBackground(api(`/subjects/${encodeURIComponent(existing.subjectId)}`, { method: "DELETE" }), "the deletion");
   return true;
 }

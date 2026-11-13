@@ -1,8 +1,10 @@
-// Papers written in the LaTeX editor. The LaTeX text and paper details live in
-// localStorage; images go to IndexedDB because localStorage is too small for them.
+// Papers written in the LaTeX editor, stored in the database (collection
+// "latexpapers"); their images are stored by the server in GridFS.
 
 import { parseLatex, type PaperMeta } from "../../latex/parser";
-import { INSTITUTE_COMMANDS_TEMPLATE } from "../../latex/sampleSource";
+import { instituteCommands } from "../../latex/sampleSource";
+import { api, apiBlob } from "../api";
+import { cache } from "../dataStore";
 
 export interface LatexPaperRecord {
   id: string;
@@ -27,45 +29,28 @@ export interface StoredImage {
   blob: Blob;
 }
 
-const STORAGE_KEY = "qpgen_latex_papers_v1";
-const DB_NAME = "qpgen_latex_assets";
-const IMAGE_STORE = "images";
-
-function load(): LatexPaperRecord[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const paperPath = (id: string) => `/latex-papers/${encodeURIComponent(id)}`;
+const imagePath = (paperId: string, name: string) => `${paperPath(paperId)}/images/${encodeURIComponent(name)}`;
 
 export function newLatexPaperId(): string {
   return `LTX-${Date.now().toString(36).toUpperCase()}`;
 }
 
 export function getLatexPapers(): LatexPaperRecord[] {
-  return load();
+  return cache.latexPapers;
 }
 
 export function getLatexPaperById(id: string): LatexPaperRecord | undefined {
-  return load().find((paper) => paper.id === id);
+  return cache.latexPapers.find((paper) => paper.id === id);
 }
 
-/** Creates or replaces a paper. Throws if the browser refuses the write. */
-export function saveLatexPaper(paper: Omit<LatexPaperRecord, "createdAt" | "updatedAt">): LatexPaperRecord {
-  const all = load();
-  const now = new Date().toISOString();
-  const index = all.findIndex((existing) => existing.id === paper.id);
-  const record: LatexPaperRecord = {
-    ...paper,
-    createdAt: index >= 0 ? all[index].createdAt : now,
-    updatedAt: now,
-  };
-  if (index >= 0) all[index] = record;
-  else all.unshift(record);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
-  return record;
+/** Creates or replaces a paper. Resolves once the server has it; rejects if it could not save. */
+export async function saveLatexPaper(paper: Omit<LatexPaperRecord, "createdAt" | "updatedAt">): Promise<LatexPaperRecord> {
+  const { id, ...body } = paper;
+  const saved = await api<LatexPaperRecord>(paperPath(id), { method: "PUT", body });
+  const others = cache.latexPapers.filter((existing) => existing.id !== id);
+  cache.latexPapers = [saved, ...others];
+  return saved;
 }
 
 export function hasHeaderCommands(meta: PaperMeta): boolean {
@@ -76,8 +61,8 @@ export function hasHeaderCommands(meta: PaperMeta): boolean {
 }
 
 /**
- * Papers saved before the details moved into the LaTeX kept them in separate
- * fields. Write those fields out as commands so nothing is lost on reopening.
+ * Papers saved before the header moved into the LaTeX kept its details in
+ * separate fields. Write those out as commands so nothing is lost on reopening.
  */
 export function sourceWithHeaderCommands(record: LatexPaperRecord): string {
   if (hasHeaderCommands(parseLatex(record.source).meta)) return record.source;
@@ -90,84 +75,37 @@ export function sourceWithHeaderCommands(record: LatexPaperRecord): string {
     record.date && `\\examdate{${escape(record.date)}}`,
     record.duration ? `\\duration{${record.duration}}` : "",
     record.totalMarks ? `\\maxmarks{${record.totalMarks}}` : "",
-    ...record.instructions.map((line) => `\\note{${escape(line)}}`),
+    ...(record.instructions ?? []).map((line) => `\\note{${escape(line)}}`),
     record.showHeader ? "" : "\\noheader",
   ].filter(Boolean);
-  // Those papers were always printed with this institute's header.
-  return `${INSTITUTE_COMMANDS_TEMPLATE}${lines.join("\n")}\n\n${record.source}`;
+  return `${instituteCommands()}${lines.join("\n")}\n\n${record.source}`;
 }
 
+/** Deletes the paper and its images. */
 export async function deleteLatexPaper(id: string): Promise<void> {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(load().filter((paper) => paper.id !== id)));
-  await deleteImagesForPaper(id);
+  await api(paperPath(id), { method: "DELETE" });
+  cache.latexPapers = cache.latexPapers.filter((paper) => paper.id !== id);
 }
 
 // ---------------------------------------------------------------------------
-// Images (IndexedDB). Keys are [paperId, fileName].
+// Images. They are stored per paper id, even before the paper is first saved.
 // ---------------------------------------------------------------------------
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(IMAGE_STORE);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T> | void
-): Promise<T | undefined> {
-  const db = await openDb();
-  try {
-    return await new Promise<T | undefined>((resolve, reject) => {
-      const tx = db.transaction(IMAGE_STORE, mode);
-      const request = run(tx.objectStore(IMAGE_STORE));
-      tx.oncomplete = () => resolve(request ? request.result : undefined);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
-  } finally {
-    db.close();
-  }
-}
-
-function paperRange(paperId: string): IDBKeyRange {
-  return IDBKeyRange.bound([paperId, ""], [paperId, "￿"]);
-}
 
 export async function putImage(paperId: string, name: string, blob: Blob): Promise<void> {
-  await withStore("readwrite", (store) => store.put(blob, [paperId, name]));
+  await api(imagePath(paperId, name), { method: "PUT", file: blob });
 }
 
 export async function deleteImage(paperId: string, name: string): Promise<void> {
-  await withStore("readwrite", (store) => store.delete([paperId, name]));
+  await api(imagePath(paperId, name), { method: "DELETE" });
 }
 
 export async function listImages(paperId: string): Promise<StoredImage[]> {
-  const db = await openDb();
-  try {
-    return await new Promise<StoredImage[]>((resolve, reject) => {
-      const images: StoredImage[] = [];
-      const tx = db.transaction(IMAGE_STORE, "readonly");
-      const cursorRequest = tx.objectStore(IMAGE_STORE).openCursor(paperRange(paperId));
-      cursorRequest.onsuccess = () => {
-        const cursor = cursorRequest.result;
-        if (!cursor) return;
-        images.push({ name: (cursor.key as [string, string])[1], blob: cursor.value as Blob });
-        cursor.continue();
-      };
-      tx.oncomplete = () => resolve(images);
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally {
-    db.close();
-  }
+  const files = await api<{ name: string }[]>(`${paperPath(paperId)}/images`);
+  return Promise.all(files.map(async (file) => ({ name: file.name, blob: await apiBlob(imagePath(paperId, file.name)) })));
 }
 
+/** Removes the images of a paper that was never saved. */
 export async function deleteImagesForPaper(paperId: string): Promise<void> {
-  await withStore("readwrite", (store) => store.delete(paperRange(paperId)));
+  const files = await api<{ name: string }[]>(`${paperPath(paperId)}/images`);
+  await Promise.all(files.map((file) => deleteImage(paperId, file.name)));
 }

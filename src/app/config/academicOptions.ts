@@ -1,55 +1,43 @@
+// Option lists for the question bank and paper forms (Bloom levels, COs, POs...).
+// They live in the database (settings: "academicOptions") and are filled in
+// after sign-in by setAcademicOptions; until then the lists are empty.
+// `export let` keeps importers in sync: they always see the current list.
+
 export interface BloomLevelOption {
   value: string;
   label: string;
   name: string;
 }
 
-export const BLOOM_LEVELS: BloomLevelOption[] = [
-  { value: "BL1", label: "BL1", name: "Remember" },
-  { value: "BL2", label: "BL2", name: "Understand" },
-  { value: "BL3", label: "BL3", name: "Apply" },
-  { value: "BL4", label: "BL4", name: "Analyze" },
-  { value: "BL5", label: "BL5", name: "Evaluate" },
-  { value: "BL6", label: "BL6", name: "Create" },
-];
+export interface ExamTypeOption {
+  value: string;
+  label: string;
+}
 
-export const COURSE_OUTCOMES = [
-  "CO1",
-  "CO2",
-  "CO3",
-  "CO4",
-  "CO5",
-] as const;
+export interface AcademicOptions {
+  BLOOM_LEVELS?: BloomLevelOption[];
+  COURSE_OUTCOMES?: string[];
+  PROGRAM_OUTCOMES?: string[];
+  PROGRAM_SPECIFIC_OUTCOMES?: string[];
+  DIFFICULTY_LEVELS?: string[];
+  EXAM_TYPES?: ExamTypeOption[];
+  COMMON_MARKS?: number[];
+}
 
-export const PROGRAM_OUTCOMES = [
-  "PO1",
-  "PO2",
-  "PO3",
-  "PO4",
-  "PO5",
-  "PO6",
-  "PO7",
-  "PO8",
-  "PO9",
-  "PO10",
-  "PO11",
-  "PO12",
-] as const;
+export let BLOOM_LEVELS: BloomLevelOption[] = [];
+export let COURSE_OUTCOMES: string[] = [];
+export let PROGRAM_OUTCOMES: string[] = [];
+export let PROGRAM_SPECIFIC_OUTCOMES: string[] = [];
+export let DIFFICULTY_LEVELS: string[] = [];
+export let EXAM_TYPES: ExamTypeOption[] = [];
+export let COMMON_MARKS: number[] = [];
 
-export const PROGRAM_SPECIFIC_OUTCOMES = [
-  "PSO1",
-  "PSO2",
-  "PSO3",
-] as const;
-
-export const DIFFICULTY_LEVELS = [
-  "Easy",
-  "Medium",
-  "Hard",
-] as const;
-
-export const EXAM_TYPES = [
-  { value: "SEE", label: "Semester End Examinations (SEE)" },
-] as const;
-
-export const COMMON_MARKS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20] as const;
+export function setAcademicOptions(options: AcademicOptions): void {
+  BLOOM_LEVELS = options.BLOOM_LEVELS ?? [];
+  COURSE_OUTCOMES = options.COURSE_OUTCOMES ?? [];
+  PROGRAM_OUTCOMES = options.PROGRAM_OUTCOMES ?? [];
+  PROGRAM_SPECIFIC_OUTCOMES = options.PROGRAM_SPECIFIC_OUTCOMES ?? [];
+  DIFFICULTY_LEVELS = options.DIFFICULTY_LEVELS ?? [];
+  EXAM_TYPES = options.EXAM_TYPES ?? [];
+  COMMON_MARKS = options.COMMON_MARKS ?? [];
+}

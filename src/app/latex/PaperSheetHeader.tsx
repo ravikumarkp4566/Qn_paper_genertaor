@@ -1,9 +1,18 @@
 import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 import { SYNC_CLASS, resolveImage, sourceKey } from "./LatexRenderer";
 import type { PaperMeta } from "./parser";
+import { collegeHeader } from "../services/dataStore";
 
-/** `\logo{sit-logo}` uses the logo that ships with the app; any other name is an uploaded image. */
-const BUILT_IN_LOGOS: Record<string, string> = { "sit-logo": SIT_LOGO_DATA_URL };
+/**
+ * `\logo{college-logo}` is the signed-in college's logo from the database;
+ * `\logo{sit-logo}` is kept for papers written before logos moved there.
+ * Any other name is an image uploaded to the paper.
+ */
+function builtInLogo(name: string): string | undefined {
+  if (name === "college-logo") return collegeHeader().logoUrl ?? undefined;
+  if (name === "sit-logo") return SIT_LOGO_DATA_URL;
+  return undefined;
+}
 
 const DEFAULT_USN_BOXES = 10;
 const MAX_USN_BOXES = 20;
@@ -25,7 +34,7 @@ export function PaperSheetHeader({ meta, images }: { meta: PaperMeta; images: Re
   const boxCount = Math.min(MAX_USN_BOXES, Math.max(1, parseInt(meta.usnBoxes?.text ?? "", 10) || DEFAULT_USN_BOXES));
   const prefix = meta.usnPrefix?.text ?? "";
   const logoName = meta.logo?.text ?? "";
-  const logoSrc = logoName ? BUILT_IN_LOGOS[logoName] ?? resolveImage(logoName, images) : undefined;
+  const logoSrc = logoName ? builtInLogo(logoName) ?? resolveImage(logoName, images) : undefined;
   // Clicking the boxes should land on whichever roll-number command exists.
   const usnRange = (meta.usnPrefix ?? meta.usnLabel ?? meta.usnBoxes)?.range;
 

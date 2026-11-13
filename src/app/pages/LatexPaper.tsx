@@ -12,7 +12,7 @@ import {
   applyEdit, indentEdit, snippetEdit, toggleCommentEdit, tokenizeLatex, type Snippet, type TokenKind,
 } from "../latex/editorCommands";
 import { PaperSheetHeader } from "../latex/PaperSheetHeader";
-import { HEADER_COMMANDS_TEMPLATE, SAMPLE_LATEX_SOURCE } from "../latex/sampleSource";
+import { headerCommandsTemplate, sampleLatexSource } from "../latex/sampleSource";
 import { downloadLatexDocx } from "../latex/docxExport";
 import {
   deleteImage,
@@ -136,7 +136,7 @@ export function LatexPaper() {
   const navigate = useNavigate();
 
   const [paperId, setPaperId] = useState(() => routeId ?? newLatexPaperId());
-  const [source, setSource] = useState(SAMPLE_LATEX_SOURCE);
+  const [source, setSource] = useState(sampleLatexSource);
   const [images, setImages] = useState<EditorImage[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -150,6 +150,7 @@ export function LatexPaper() {
   const [caret, setCaret] = useState<number | null>(null);
   const [mark, setMark] = useState<SourceRange | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -175,7 +176,7 @@ export function LatexPaper() {
       paperIdRef.current = targetId;
       savedRef.current = false;
       setPaperId(targetId);
-      setSource(SAMPLE_LATEX_SOURCE);
+      setSource(sampleLatexSource());
       setDirty(false);
       setMessage(null);
       setMark(null);
@@ -353,9 +354,10 @@ export function LatexPaper() {
   };
 
   const insertHeaderCommands = () => {
-    setSource((current) => `${HEADER_COMMANDS_TEMPLATE}\n${current}`);
+    const header = headerCommandsTemplate();
+    setSource((current) => `${header}\n${current}`);
     setDirty(true);
-    setMark([0, HEADER_COMMANDS_TEMPLATE.length]);
+    setMark([0, header.length]);
     setCaret(0);
     if (textareaRef.current) textareaRef.current.scrollTop = 0;
   };
@@ -421,11 +423,12 @@ export function LatexPaper() {
     }
   };
 
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     // History lists papers by these details, so copy them out of the LaTeX.
     const { meta } = parseLatex(source);
+    setSaving(true);
     try {
-      saveLatexPaper({
+      await saveLatexPaper({
         id: paperId,
         title: meta.examTitle?.text ?? "",
         subjectName: meta.subject?.text || "Untitled LaTeX paper",
@@ -438,9 +441,11 @@ export function LatexPaper() {
         instructions: meta.notes.map((note) => note.text),
         source,
       });
-    } catch {
-      setMessage({ kind: "error", text: "Could not save: browser storage is full or blocked." });
+    } catch (error) {
+      setMessage({ kind: "error", text: `Could not save: ${error instanceof Error ? error.message : "server error"}` });
       return;
+    } finally {
+      setSaving(false);
     }
     savedRef.current = true;
     setDirty(false);
@@ -452,7 +457,7 @@ export function LatexPaper() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        save();
+        void save();
       } else if (event.key === "Escape") {
         setFullscreen(false);
       }
@@ -560,10 +565,11 @@ export function LatexPaper() {
           </button>
           <button
             type="button"
-            onClick={save}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700"
+            onClick={() => void save()}
+            disabled={saving}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-70"
           >
-            <Save className="h-4 w-4" />
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>Save</span>
           </button>
         </div>

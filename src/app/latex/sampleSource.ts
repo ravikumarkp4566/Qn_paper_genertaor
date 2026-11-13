@@ -1,14 +1,34 @@
-// The commands that fill the institute header. "Insert header" adds these to
-// a paper that has none.
-export const INSTITUTE_COMMANDS_TEMPLATE = String.raw`\institute{Siddaganga Institute of Technology, Tumakuru-572 103}
-\affiliation{(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)}
-\logo{sit-logo}
-\usnlabel{USN}
-\usnprefix{1SI}
-\usnboxes{10}
-`;
+import { collegeHeader } from "../services/dataStore";
 
-export const HEADER_COMMANDS_TEMPLATE = INSTITUTE_COMMANDS_TEMPLATE + String.raw`\examtitle{Semester End Examinations}
+/** LaTeX-safe text for a command argument. */
+const escapeLatex = (text: string) => text.replace(/([%&#_$])/g, "\\$1");
+
+/**
+ * The institute commands for the signed-in user's college, read from the
+ * database: name, affiliation, logo and roll-number boxes.
+ */
+export function instituteCommands(): string {
+  const college = collegeHeader();
+  return [
+    college.institute && `\\institute{${escapeLatex(college.institute)}}`,
+    college.affiliation && `\\affiliation{${escapeLatex(college.affiliation)}}`,
+    college.logoUrl && "\\logo{college-logo}",
+    `\\usnlabel{${escapeLatex(college.usnLabel)}}`,
+    college.usnPrefix && `\\usnprefix{${escapeLatex(college.usnPrefix)}}`,
+    `\\usnboxes{${college.usnBoxes}}`,
+  ]
+    .filter(Boolean)
+    .map((line) => `${line}\n`)
+    .join("");
+}
+
+/** Header commands with example exam details. "Insert header" adds these to a paper that has none. */
+export const headerCommandsTemplate = () => instituteCommands() + EXAM_DETAILS;
+
+/** Starter text for a new paper: header plus a tour of equations, parts, marks and a table. */
+export const sampleLatexSource = () => headerCommandsTemplate() + SAMPLE_BODY;
+
+const EXAM_DETAILS = String.raw`\examtitle{Semester End Examinations}
 \subject{Engineering Mathematics}
 \coursecode{MA101}
 \semester{Semester 3}
@@ -19,9 +39,7 @@ export const HEADER_COMMANDS_TEMPLATE = INSTITUTE_COMMANDS_TEMPLATE + String.raw
 \note{Answer any five questions choosing one full question from each unit.}
 `;
 
-// Starter text for a new LaTeX paper. It doubles as a tour of what the
-// editor understands: equations, nested parts, marks, tables and images.
-export const SAMPLE_LATEX_SOURCE = HEADER_COMMANDS_TEMPLATE + String.raw`
+const SAMPLE_BODY = String.raw`
 \begin{center}
 \textbf{Unit - I}
 \end{center}

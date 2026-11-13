@@ -11,57 +11,29 @@ export type AssessmentPolicy = {
   allowedQuestionMarks: number[];
 };
 
-export const DEFAULT_ASSESSMENT_POLICIES: AssessmentPolicy[] = [
-  {
-    kind: "SEE",
-    label: "Semester End Exam",
-    totalMarks: 100,
-    duration: 180,
-    hasChoice: true,
-    questionCount: 10,
-    questionType: "descriptive",
-    allowedQuestionMarks: [4, 6, 8, 10],
-  },
-  {
-    kind: "TEST",
-    label: "Class Test",
-    totalMarks: 50,
-    duration: 60,
-    hasChoice: false,
-    questionCount: 2,
-    questionType: "descriptive",
-    allowedQuestionMarks: [5, 10],
-  },
-  {
-    kind: "QUIZ",
-    label: "Quiz",
-    totalMarks: 20,
-    duration: 30,
-    hasChoice: false,
-    questionCount: 20,
-    questionType: "mcq",
-    allowedQuestionMarks: [1, 2, 3, 4],
-  },
-];
+// Stored in the database (collection "assessmentpolicies"); loaded at sign-in.
 
-const STORAGE_KEY = "qpgen_assessment_policies_v1";
+import { api, saveInBackground } from "./api";
+import { cache } from "./dataStore";
 
 export function getAssessmentPolicies(): AssessmentPolicy[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return DEFAULT_ASSESSMENT_POLICIES;
-    const parsed = JSON.parse(stored) as AssessmentPolicy[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_ASSESSMENT_POLICIES;
-  } catch {
-    return DEFAULT_ASSESSMENT_POLICIES;
+  return cache.policies;
+}
+
+/** Saves the policies that changed. Platform admins edit the defaults every college starts from. */
+export function saveAssessmentPolicies(policies: AssessmentPolicy[]): void {
+  const changed = policies.filter((policy) => {
+    const before = cache.policies.find((p) => p.kind === policy.kind);
+    return JSON.stringify(before) !== JSON.stringify(policy);
+  });
+  cache.policies = policies;
+  for (const policy of changed) {
+    const { kind, ...body } = policy as AssessmentPolicy & { id?: string; createdAt?: string; updatedAt?: string };
+    delete (body as { id?: string }).id;
+    saveInBackground(api(`/assessment-policies/${kind}`, { method: "PUT", body }), `the ${policy.label} rules`);
   }
 }
 
-export function saveAssessmentPolicies(policies: AssessmentPolicy[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(policies));
-}
-
 export function getAssessmentPolicy(kind: AssessmentKind): AssessmentPolicy {
-  return getAssessmentPolicies().find((policy) => policy.kind === kind)
-    ?? DEFAULT_ASSESSMENT_POLICIES.find((policy) => policy.kind === kind)!;
+  return cache.policies.find((policy) => policy.kind === kind) ?? cache.policies[0];
 }

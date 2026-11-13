@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { collegeHeader } from "../services/dataStore";
 import { Link } from "react-router";
 import { Eye, Download, Trash2, Clock, Search, FileText, Sparkles, Sigma, Pencil } from "lucide-react";
 import { getPapers, deletePaper, PaperRecord } from "../services/storage/paperStorage";
@@ -71,8 +72,8 @@ export function History() {
       }));
 
       generateQuestionPaperDOCX({
-        universityName: paper.universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
-        affiliationSubtext: paper.affiliationSubtext || "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)",
+        universityName: paper.universityName || collegeHeader().institute,
+        affiliationSubtext: paper.affiliationSubtext || collegeHeader().affiliation,
         examTitle: paper.title || "Supplementary Semester B.E. Information Sc. and Engg. Examinations, Aug-Sept. 2025",
         program: paper.degreeName || "B.E.",
         departmentName: paper.departmentName || "Information Sc. and Engg.",
@@ -81,7 +82,7 @@ export function History() {
         date: paper.date || "Aug-Sept. 2025",
         time: `${Math.floor((paper.duration || 180) / 60)} Hours`,
         maxMarks: `${paper.totalMarks || 100}`,
-        usnPrefix: paper.usnPrefix || "1SI",
+        usnPrefix: paper.usnPrefix || collegeHeader().usnPrefix,
         mobilePhonesProhibited: paper.mobilePhonesProhibited,
         instructions: paper.instructions || [
           "Revealing of Identity in any form in the answer book will be treated as malpractice.",

@@ -40,6 +40,18 @@ api.post("/auth/login", async (req, res) => {
   res.json({ token: signToken(user), user: publicUser(user) });
 });
 
+/** College logos are public (they print on every paper), so <img> tags can load them directly. */
+api.get("/colleges/:id/logo", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res, "Logo");
+  const college = await College.findById(req.params.id);
+  const fileId = college?.header?.logoFileId;
+  const [file] = fileId ? await fileBucket().find({ _id: fileId }).toArray() : [];
+  if (!file) return notFound(res, "Logo");
+  res.type(file.metadata?.contentType ?? "application/octet-stream");
+  res.set("Cache-Control", "public, max-age=3600");
+  fileBucket().openDownloadStream(fileId).pipe(res);
+});
+
 api.use(requireAuth);
 
 api.get("/auth/me", (req, res) => res.json({ user: publicUser(req.user) }));
@@ -179,7 +191,7 @@ async function deleteFiles(filter) {
 }
 
 api.get("/latex-papers", async (req, res) => {
-  const papers = await LatexPaper.find({ college: collegeOf(req) }).select("-source").sort({ updatedAt: -1 });
+  const papers = await LatexPaper.find({ college: collegeOf(req) }).sort({ updatedAt: -1 });
   res.json(papers.map((p) => withId(p, "paperId")));
 });
 

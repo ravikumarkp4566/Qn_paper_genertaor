@@ -27,6 +27,7 @@ import {
 import { saveAs } from "file-saver";
 import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 import { latexToOmml } from "./omml";
+import { cache } from "../services/dataStore";
 import { parseLatex, type Align, type Block, type Inline, type ListItem, type PaperMeta, type TableCell as LatexCell } from "./parser";
 
 // A4 with 0.7 inch margins. Word measures in twips (1/20 pt); 15 twips = 1 px.
@@ -524,7 +525,8 @@ export async function buildLatexDocx(source: string, images: Record<string, Blob
   let logo: LoadedImage | null = null;
   const logoName = parsed.meta.logo?.text;
   if (parsed.meta.showHeader && logoName) {
-    if (logoName === "sit-logo") logo = await loadImage(await (await fetch(SIT_LOGO_DATA_URL)).blob());
+    if (logoName === "college-logo" && cache.logoBytes) logo = await loadImage(new Blob([cache.logoBytes]));
+    else if (logoName === "sit-logo") logo = await loadImage(await (await fetch(SIT_LOGO_DATA_URL)).blob());
     else logo = findImage(logoName, loaded) ?? null;
   }
 

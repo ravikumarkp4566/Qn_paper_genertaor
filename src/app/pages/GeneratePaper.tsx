@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { collegeHeader } from "../services/dataStore";
 import { useNavigate } from "react-router";
 import {
   ArrowRight,
@@ -33,7 +34,6 @@ import {
   PaperRecord,
   PaperUnit,
 } from "../services/storage/paperStorage";
-import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 import {
   AssessmentKind,
   getAssessmentPolicy,
@@ -88,12 +88,12 @@ export function GeneratePaper() {
   const [maxMarksPerUnit, setMaxMarksPerUnit] = useState<number>(20);
   const [duration, setDuration] = useState<number>(180);
   const [universityName, setUniversityName] = useState<string>(
-    "Siddaganga Institute of Technology, Tumakuru-572 103"
+    collegeHeader().institute
   );
   const [affiliationSubtext, setAffiliationSubtext] = useState<string>(
-    "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)"
+    collegeHeader().affiliation
   );
-  const [usnPrefix, setUsnPrefix] = useState<string>("1SI");
+  const [usnPrefix, setUsnPrefix] = useState<string>(() => collegeHeader().usnPrefix);
   const [mobilePhonesProhibited, setMobilePhonesProhibited] = useState<boolean>(true);
   const [instruction1, setInstruction1] = useState<string>(
     "Revealing of Identity in any form in the answer book will be treated as malpractice."
@@ -939,9 +939,9 @@ export function GeneratePaper() {
       totalMarks: totalMarks,
       duration: duration,
       date: examSession || "Aug-Sept. 2025",
-      universityName: universityName || "Siddaganga Institute of Technology, Tumakuru-572 103",
-      affiliationSubtext: affiliationSubtext || "(An Autonomous Institution affiliated to VTU, Belagavi, Approved by AICTE, New Delhi)",
-      usnPrefix: usnPrefix || "1SI",
+      universityName: universityName || collegeHeader().institute,
+      affiliationSubtext: affiliationSubtext || collegeHeader().affiliation,
+      usnPrefix: usnPrefix || collegeHeader().usnPrefix,
       departmentName: departmentName || "Information Sc. and Engg.",
       degreeName: degreeName || "B.E.",
       maxMarksPerUnit: maxMarksPerUnit,
