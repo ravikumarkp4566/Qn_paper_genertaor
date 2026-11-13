@@ -2,11 +2,15 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
-  AlertTriangle, ArrowLeft, Check, CodeXml, Columns2, FileText, Heading, ImagePlus, Maximize2, Minimize2,
+  AlertTriangle, ArrowLeft, Check, CodeXml, Columns2, FileText, Heading, Maximize2, Minimize2,
   Save, Trash2,
 } from "lucide-react";
 import { durationToMinutes, findMetaRange, findSourceRange, parseLatex, type PaperMeta, type SourceRange } from "../latex/parser";
 import { LatexRenderer } from "../latex/LatexRenderer";
+import { BOLD, ITALIC, LatexToolbar, UNDERLINE, type ToolbarCommand } from "../latex/LatexToolbar";
+import {
+  applyEdit, indentEdit, snippetEdit, toggleCommentEdit, tokenizeLatex, type Snippet, type TokenKind,
+} from "../latex/editorCommands";
 import { PaperSheetHeader } from "../latex/PaperSheetHeader";
 import { HEADER_COMMANDS_TEMPLATE, INSTITUTE_COMMANDS_TEMPLATE, SAMPLE_LATEX_SOURCE } from "../latex/sampleSource";
 import {
@@ -37,6 +41,67 @@ const VIEW_MODES: { mode: ViewMode; label: string; icon: typeof CodeXml }[] = [
 /** Text metrics shared by the editor and the highlight layer behind it; they must match exactly. */
 const EDITOR_TEXT_CLASS =
   "absolute inset-0 h-full w-full overflow-y-scroll whitespace-pre-wrap break-words p-4 font-mono text-[13px] leading-relaxed";
+
+const TOKEN_CLASS: Record<TokenKind, string> = {
+  text: "text-slate-900",
+  command: "text-indigo-700",
+  comment: "text-slate-400",
+  math: "text-emerald-700",
+  brace: "text-slate-500",
+};
+
+/**
+ * The visible text of the editor: the source with LaTeX colouring, plus the
+ * range found from a click on the paper marked in yellow. The textarea on top
+ * of it is transparent and only provides the caret, selection and typing.
+ */
+function HighlightedSource({
+  source,
+  mark,
+  markRef,
+}: {
+  source: string;
+  mark: SourceRange | null;
+  markRef: React.RefObject<HTMLElement | null>;
+}) {
+  const tokens = useMemo(() => tokenizeLatex(source), [source]);
+  const pieces: React.ReactNode[] = [];
+  let markAttached = false;
+  tokens.forEach((token, index) => {
+    // Split each token where the yellow mark starts and ends.
+    const cuts = [token.start, token.end];
+    if (mark) for (const edge of mark) if (edge > token.start && edge < token.end) cuts.push(edge);
+    cuts.sort((a, b) => a - b);
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const from = cuts[k];
+      const to = cuts[k + 1];
+      const text = source.slice(from, to);
+      const marked = mark !== null && from >= mark[0] && to <= mark[1];
+      const key = `${index}-${k}`;
+      if (!marked) {
+        pieces.push(
+          token.kind === "text" ? text : (
+            <span key={key} className={TOKEN_CLASS[token.kind]}>
+              {text}
+            </span>
+          )
+        );
+        continue;
+      }
+      pieces.push(
+        <mark
+          key={key}
+          ref={markAttached ? undefined : (markRef as React.RefObject<HTMLElement>)}
+          className={`rounded-sm bg-amber-200 ${TOKEN_CLASS[token.kind]}`}
+        >
+          {text}
+        </mark>
+      );
+      markAttached = true;
+    }
+  });
+  return <>{pieces}</>;
+}
 
 const TOOLBAR_BUTTON_CLASS =
   "inline-flex cursor-pointer items-center gap-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-600";
@@ -261,20 +326,57 @@ export function LatexPaper() {
     if (!selectedText) textarea.focus({ preventScroll: true });
   };
 
+  // Every toolbar action and image insert goes through the browser's own
+  // editing (applyEdit), so Ctrl+Z undoes it like typing.
   const insertAtCursor = useCallback((text: string) => {
     const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? Number.MAX_SAFE_INTEGER;
-    const end = textarea?.selectionEnd ?? Number.MAX_SAFE_INTEGER;
-    setSource((current) => current.slice(0, start) + text + current.slice(end));
-    setDirty(true);
-    setMark(null);
-    requestAnimationFrame(() => {
-      if (!textarea) return;
-      textarea.focus();
-      const position = Math.min(start, textarea.value.length) + text.length;
-      textarea.setSelectionRange(position, position);
-    });
+    if (!textarea) return;
+    const { selectionStart: start, selectionEnd: end } = textarea;
+    const caretAfter = start + text.length;
+    applyEdit(textarea, { from: start, to: end, insert: text, selectFrom: caretAfter, selectTo: caretAfter });
   }, []);
+
+  const runSnippet = useCallback(
+    (snippet: Snippet) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      if (view === "paper") setView("split");
+      applyEdit(textarea, snippetEdit(textarea.value, textarea.selectionStart, textarea.selectionEnd, snippet));
+    },
+    [view]
+  );
+
+  const runCommand = (command: ToolbarCommand) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    if (command === "image") {
+      fileInputRef.current?.click();
+      return;
+    }
+    if (command === "comment") {
+      applyEdit(textarea, toggleCommentEdit(textarea.value, textarea.selectionStart, textarea.selectionEnd));
+      return;
+    }
+    textarea.focus();
+    document.execCommand(command);
+  };
+
+  const onEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = event.currentTarget;
+    const { selectionStart: start, selectionEnd: end, value } = textarea;
+    const ctrl = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    if (ctrl && !event.shiftKey && !event.altKey && (key === "b" || key === "i" || key === "u")) {
+      event.preventDefault();
+      runSnippet(key === "b" ? BOLD : key === "i" ? ITALIC : UNDERLINE);
+    } else if (ctrl && key === "/") {
+      event.preventDefault();
+      applyEdit(textarea, toggleCommentEdit(value, start, end));
+    } else if (event.key === "Tab" && !ctrl && !event.altKey) {
+      event.preventDefault();
+      applyEdit(textarea, indentEdit(value, start, end, event.shiftKey));
+    }
+  };
 
   const insertHeaderCommands = () => {
     setSource((current) => `${HEADER_COMMANDS_TEMPLATE}\n${current}`);
@@ -509,10 +611,6 @@ export function LatexPaper() {
                   <span>Insert header</span>
                 </button>
               )}
-              <button type="button" onClick={() => fileInputRef.current?.click()} className={TOOLBAR_BUTTON_CLASS}>
-                <ImagePlus className="h-3.5 w-3.5" />
-                <span>Add image</span>
-              </button>
             </div>
             <input
               ref={fileInputRef}
@@ -527,20 +625,12 @@ export function LatexPaper() {
             />
           </div>
 
+          <LatexToolbar onSnippet={runSnippet} onCommand={runCommand} />
+
           <div className="relative h-[60vh] flex-1 bg-white lg:h-auto lg:min-h-0">
-            {/* Highlight layer: the same text, invisible, with the synced range marked. */}
-            <div ref={backdropRef} aria-hidden="true" className={`${EDITOR_TEXT_CLASS} pointer-events-none text-transparent`}>
-              {mark ? (
-                <>
-                  {source.slice(0, mark[0])}
-                  <mark ref={markRef} className="rounded-sm bg-amber-200 text-transparent">
-                    {source.slice(mark[0], mark[1])}
-                  </mark>
-                  {source.slice(mark[1])}
-                </>
-              ) : (
-                source
-              )}
+            {/* Coloured text layer; the textarea above it is transparent. */}
+            <div ref={backdropRef} aria-hidden="true" className={`${EDITOR_TEXT_CLASS} pointer-events-none`}>
+              <HighlightedSource source={source} mark={mark} markRef={markRef} />
               {"\n"}
             </div>
             <textarea
@@ -554,6 +644,7 @@ export function LatexPaper() {
                 setCaret(event.target.selectionStart);
               }}
               onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onKeyDown={onEditorKeyDown}
               onPointerDown={() => setMark(null)}
               onScroll={(event) => {
                 if (backdropRef.current) backdropRef.current.scrollTop = event.currentTarget.scrollTop;
@@ -567,7 +658,7 @@ export function LatexPaper() {
               spellCheck={false}
               aria-label="LaTeX source"
               placeholder="Paste your LaTeX question paper here…"
-              className={`${EDITOR_TEXT_CLASS} resize-none bg-transparent text-slate-900 focus:outline-none`}
+              className={`${EDITOR_TEXT_CLASS} resize-none bg-transparent text-transparent caret-slate-900 selection:bg-indigo-300/40 placeholder:text-slate-400 focus:outline-none`}
             />
           </div>
 
