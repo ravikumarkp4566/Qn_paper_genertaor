@@ -17,7 +17,7 @@ export interface Question {
 
 const STORAGE_KEY = "qpgen_questions_v2";
 
-const INITIAL_QUESTIONS: Question[] = [
+export const INITIAL_QUESTIONS: Question[] = [
   {
     id: "DS-2024-001",
     subjectId: "DS-S3IS01",

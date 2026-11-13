@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Northstar University",
+    "plan": "Enterprise",
+    "users": 84,
+    "papers": 4230,
+    "status": "Healthy"
+  },
+  {
+    "name": "Apex Institute of Technology",
+    "plan": "Growth",
+    "users": 42,
+    "papers": 2180,
+    "status": "Healthy"
+  },
+  {
+    "name": "Greenfield College",
+    "plan": "Starter",
+    "users": 18,
+    "papers": 642,
+    "status": "Review"
+  }
+]

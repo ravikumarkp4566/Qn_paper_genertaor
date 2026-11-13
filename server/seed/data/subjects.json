@@ -1,0 +1,10 @@
+[
+  {
+    "subjectId": "DS-S3IS01",
+    "subjectName": "Data Structures / Data Structures and Applications",
+    "courseCode": "S3IS01/3RIS02",
+    "semester": "III Semester",
+    "numberOfUnits": 5,
+    "description": "Structures, file functions, stacks, queues, linked lists, and tree data structures."
+  }
+]

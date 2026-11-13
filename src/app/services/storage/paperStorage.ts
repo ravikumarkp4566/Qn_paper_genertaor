@@ -72,7 +72,7 @@ export interface PaperRecord {
 
 const STORAGE_KEY = "qpgen_saved_papers_v2";
 
-const INITIAL_PAPERS: PaperRecord[] = [
+export const INITIAL_PAPERS: PaperRecord[] = [
   {
     id: "PAP-DS-01",
     title: "Even Semester B.E. Examinations - Data Structures",

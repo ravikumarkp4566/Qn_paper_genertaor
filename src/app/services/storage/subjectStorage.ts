@@ -11,7 +11,7 @@ export interface Subject {
 
 const STORAGE_KEY = "qpgen_subjects_v2";
 
-const INITIAL_SUBJECTS: Subject[] = [
+export const INITIAL_SUBJECTS: Subject[] = [
   {
     subjectId: "DS-S3IS01",
     subjectName: "Data Structures / Data Structures and Applications",

@@ -1,0 +1,45 @@
+[
+  {
+    "kind": "SEE",
+    "label": "Semester End Exam",
+    "totalMarks": 100,
+    "duration": 180,
+    "hasChoice": true,
+    "questionCount": 10,
+    "questionType": "descriptive",
+    "allowedQuestionMarks": [
+      4,
+      6,
+      8,
+      10
+    ]
+  },
+  {
+    "kind": "TEST",
+    "label": "Class Test",
+    "totalMarks": 50,
+    "duration": 60,
+    "hasChoice": false,
+    "questionCount": 2,
+    "questionType": "descriptive",
+    "allowedQuestionMarks": [
+      5,
+      10
+    ]
+  },
+  {
+    "kind": "QUIZ",
+    "label": "Quiz",
+    "totalMarks": 20,
+    "duration": 30,
+    "hasChoice": false,
+    "questionCount": 20,
+    "questionType": "mcq",
+    "allowedQuestionMarks": [
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+]
