@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import { Eye, Download, Trash2, Clock, Search, FileText, Sparkles } from "lucide-react";
+import { Eye, Download, Trash2, Clock, Search, FileText, Sparkles, Sigma, Pencil } from "lucide-react";
 import { getPapers, deletePaper, PaperRecord } from "../services/storage/paperStorage";
+import { getLatexPapers, deleteLatexPaper, LatexPaperRecord } from "../services/storage/latexPaperStorage";
 import { generateQuestionPaperDOCX, generateSamplePaper } from "../utils/docxGenerator";
 
 export function History() {
   const [papers, setPapers] = useState<PaperRecord[]>([]);
+  const [latexPapers, setLatexPapers] = useState<LatexPaperRecord[]>([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("All");
 
   const refreshList = () => {
     setPapers(getPapers());
+    setLatexPapers(getLatexPapers());
   };
 
   useEffect(() => {
@@ -22,6 +25,12 @@ export function History() {
       deletePaper(id);
       refreshList();
     }
+  };
+
+  const handleDeleteLatex = async (paper: LatexPaperRecord) => {
+    if (!confirm(`Delete the LaTeX paper "${paper.subjectName}" and its images? This cannot be undone.`)) return;
+    await deleteLatexPaper(paper.id);
+    refreshList();
   };
 
   const handleDownloadDOCX = (paper: PaperRecord) => {
@@ -78,6 +87,15 @@ export function History() {
     return true;
   });
 
+  const filteredLatexPapers = latexPapers.filter((p) => {
+    const q = search.toLowerCase();
+    return (
+      p.subjectName.toLowerCase().includes(q) ||
+      p.courseCode.toLowerCase().includes(q) ||
+      p.title.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       {/* Top Header */}
@@ -91,13 +109,22 @@ export function History() {
           </p>
         </div>
 
-        <Link
-          to="/generate"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm shadow-indigo-500/20 transition-all cursor-pointer self-start sm:self-auto"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>New Paper</span>
-        </Link>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Link
+            to="/latex-paper"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:border-indigo-300 hover:text-indigo-600 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+          >
+            <Sigma className="w-4 h-4" />
+            <span>LaTeX Paper</span>
+          </Link>
+          <Link
+            to="/generate"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>New Paper</span>
+          </Link>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -137,7 +164,56 @@ export function History() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredPapers.length === 0 ? (
+              {filteredLatexPapers.map((paper) => (
+                <tr key={paper.id} className="hover:bg-slate-50/80 transition-colors group align-middle">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                        <Sigma className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900 text-xs">{paper.subjectName}</p>
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {[paper.courseCode, paper.semester].filter(Boolean).join(" • ") || paper.title}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold text-[11px]">
+                      LaTeX
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-center text-slate-600">
+                    {paper.date || new Date(paper.updatedAt).toLocaleDateString()}
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <span className="font-bold text-indigo-700">{paper.totalMarks} Marks</span>
+                  </td>
+                  <td className="py-3 px-3 text-center text-slate-600">{paper.duration} min</td>
+                  <td className="py-3 px-3 text-center text-slate-400">—</td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        to={`/latex-paper/${paper.id}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded transition-colors shadow-2xs"
+                        title="View and edit this LaTeX paper"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>View / Edit</span>
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteLatex(paper)}
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                        title="Delete Paper"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredPapers.length === 0 && filteredLatexPapers.length > 0 ? null : filteredPapers.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
                     <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
