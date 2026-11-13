@@ -1,6 +1,9 @@
 // Papers written in the LaTeX editor. The LaTeX text and paper details live in
 // localStorage; images go to IndexedDB because localStorage is too small for them.
 
+import { parseLatex, type PaperMeta } from "../../latex/parser";
+import { INSTITUTE_COMMANDS_TEMPLATE } from "../../latex/sampleSource";
+
 export interface LatexPaperRecord {
   id: string;
   /** Exam title line, e.g. "Even Semester B.E. Examinations, June 2026". */
@@ -63,6 +66,35 @@ export function saveLatexPaper(paper: Omit<LatexPaperRecord, "createdAt" | "upda
   else all.unshift(record);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   return record;
+}
+
+export function hasHeaderCommands(meta: PaperMeta): boolean {
+  return Boolean(
+    meta.institute || meta.affiliation || meta.logo || meta.examTitle || meta.subject || meta.courseCode ||
+      meta.semester || meta.maxMarks || meta.duration || meta.examDate || meta.notes.length
+  );
+}
+
+/**
+ * Papers saved before the details moved into the LaTeX kept them in separate
+ * fields. Write those fields out as commands so nothing is lost on reopening.
+ */
+export function sourceWithHeaderCommands(record: LatexPaperRecord): string {
+  if (hasHeaderCommands(parseLatex(record.source).meta)) return record.source;
+  const escape = (text: string) => text.replace(/([%&#_$])/g, "\\$1");
+  const lines = [
+    record.title && `\\examtitle{${escape(record.title)}}`,
+    record.subjectName && `\\subject{${escape(record.subjectName)}}`,
+    record.courseCode && `\\coursecode{${escape(record.courseCode)}}`,
+    record.semester && `\\semester{${escape(record.semester)}}`,
+    record.date && `\\examdate{${escape(record.date)}}`,
+    record.duration ? `\\duration{${record.duration}}` : "",
+    record.totalMarks ? `\\maxmarks{${record.totalMarks}}` : "",
+    ...record.instructions.map((line) => `\\note{${escape(line)}}`),
+    record.showHeader ? "" : "\\noheader",
+  ].filter(Boolean);
+  // Those papers were always printed with this institute's header.
+  return `${INSTITUTE_COMMANDS_TEMPLATE}${lines.join("\n")}\n\n${record.source}`;
 }
 
 export async function deleteLatexPaper(id: string): Promise<void> {

@@ -2,7 +2,14 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { Eye, Download, Trash2, Clock, Search, FileText, Sparkles, Sigma, Pencil } from "lucide-react";
 import { getPapers, deletePaper, PaperRecord } from "../services/storage/paperStorage";
-import { getLatexPapers, deleteLatexPaper, LatexPaperRecord } from "../services/storage/latexPaperStorage";
+import {
+  getLatexPapers,
+  deleteLatexPaper,
+  listImages,
+  sourceWithHeaderCommands,
+  LatexPaperRecord,
+} from "../services/storage/latexPaperStorage";
+import { downloadLatexDocx } from "../latex/docxExport";
 import { generateQuestionPaperDOCX, generateSamplePaper } from "../utils/docxGenerator";
 
 export function History() {
@@ -24,6 +31,18 @@ export function History() {
     if (confirm(`Are you sure you want to delete this paper record: "${title}"?`)) {
       deletePaper(id);
       refreshList();
+    }
+  };
+
+  const handleDownloadLatexDocx = async (paper: LatexPaperRecord) => {
+    try {
+      const stored = await listImages(paper.id);
+      await downloadLatexDocx(
+        sourceWithHeaderCommands(paper),
+        Object.fromEntries(stored.map((image) => [image.name, image.blob]))
+      );
+    } catch {
+      alert("Could not create the Word file for this paper.");
     }
   };
 
@@ -202,6 +221,14 @@ export function History() {
                         <Pencil className="w-3.5 h-3.5" />
                         <span>View / Edit</span>
                       </Link>
+                      <button
+                        onClick={() => void handleDownloadLatexDocx(paper)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors"
+                        title="Download Word Document (.docx)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>DOCX</span>
+                      </button>
                       <button
                         onClick={() => handleDeleteLatex(paper)}
                         className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"

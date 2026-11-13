@@ -2,17 +2,18 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
-  AlertTriangle, ArrowLeft, Check, CodeXml, Columns2, FileText, Heading, Maximize2, Minimize2,
+  AlertTriangle, ArrowLeft, Check, CodeXml, Columns2, Download, FileText, Heading, Loader2, Maximize2, Minimize2,
   Save, Trash2,
 } from "lucide-react";
-import { durationToMinutes, findMetaRange, findSourceRange, parseLatex, type PaperMeta, type SourceRange } from "../latex/parser";
+import { durationToMinutes, findMetaRange, findSourceRange, parseLatex, type SourceRange } from "../latex/parser";
 import { LatexRenderer } from "../latex/LatexRenderer";
 import { BOLD, ITALIC, LatexToolbar, UNDERLINE, type ToolbarCommand } from "../latex/LatexToolbar";
 import {
   applyEdit, indentEdit, snippetEdit, toggleCommentEdit, tokenizeLatex, type Snippet, type TokenKind,
 } from "../latex/editorCommands";
 import { PaperSheetHeader } from "../latex/PaperSheetHeader";
-import { HEADER_COMMANDS_TEMPLATE, INSTITUTE_COMMANDS_TEMPLATE, SAMPLE_LATEX_SOURCE } from "../latex/sampleSource";
+import { HEADER_COMMANDS_TEMPLATE, SAMPLE_LATEX_SOURCE } from "../latex/sampleSource";
+import { downloadLatexDocx } from "../latex/docxExport";
 import {
   deleteImage,
   deleteImagesForPaper,
@@ -21,7 +22,8 @@ import {
   newLatexPaperId,
   putImage,
   saveLatexPaper,
-  type LatexPaperRecord,
+  hasHeaderCommands,
+  sourceWithHeaderCommands,
 } from "../services/storage/latexPaperStorage";
 
 interface EditorImage {
@@ -118,35 +120,6 @@ function readStoredSplit(): number {
   }
 }
 
-function hasHeaderCommands(meta: PaperMeta): boolean {
-  return Boolean(
-    meta.institute || meta.affiliation || meta.logo || meta.examTitle || meta.subject || meta.courseCode ||
-      meta.semester || meta.maxMarks || meta.duration || meta.examDate || meta.notes.length
-  );
-}
-
-/**
- * Papers saved before the details moved into the LaTeX kept them in separate
- * fields. Write those fields out as commands so nothing is lost on reopening.
- */
-function sourceWithHeaderCommands(record: LatexPaperRecord): string {
-  if (hasHeaderCommands(parseLatex(record.source).meta)) return record.source;
-  const escape = (text: string) => text.replace(/([%&#_$])/g, "\\$1");
-  const lines = [
-    record.title && `\\examtitle{${escape(record.title)}}`,
-    record.subjectName && `\\subject{${escape(record.subjectName)}}`,
-    record.courseCode && `\\coursecode{${escape(record.courseCode)}}`,
-    record.semester && `\\semester{${escape(record.semester)}}`,
-    record.date && `\\examdate{${escape(record.date)}}`,
-    record.duration ? `\\duration{${record.duration}}` : "",
-    record.totalMarks ? `\\maxmarks{${record.totalMarks}}` : "",
-    ...record.instructions.map((line) => `\\note{${escape(line)}}`),
-    record.showHeader ? "" : "\\noheader",
-  ].filter(Boolean);
-  // Those papers were always printed with this institute's header.
-  return `${INSTITUTE_COMMANDS_TEMPLATE}${lines.join("\n")}\n\n${record.source}`;
-}
-
 function uniqueImageName(fileName: string, taken: string[]): string {
   const clean = fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "image.png";
   const dot = clean.lastIndexOf(".");
@@ -176,6 +149,7 @@ export function LatexPaper() {
   // `mark` is the LaTeX highlighted after a click or selection on the paper.
   const [caret, setCaret] = useState<number | null>(null);
   const [mark, setMark] = useState<SourceRange | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -432,6 +406,21 @@ export function LatexPaper() {
     });
   };
 
+  const downloadDocx = async () => {
+    setExporting(true);
+    setMessage(null);
+    try {
+      const blobs = await Promise.all(
+        images.map(async (image) => [image.name, await (await fetch(image.url)).blob()] as const)
+      );
+      await downloadLatexDocx(source, Object.fromEntries(blobs));
+    } catch {
+      setMessage({ kind: "error", text: "Could not create the Word file." });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const save = useCallback(() => {
     // History lists papers by these details, so copy them out of the LaTeX.
     const { meta } = parseLatex(source);
@@ -558,6 +547,16 @@ export function LatexPaper() {
             className="cursor-pointer rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
           >
             {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadDocx()}
+            disabled={exporting}
+            title="Download as an editable Word file"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-wait disabled:opacity-60"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span>DOCX</span>
           </button>
           <button
             type="button"
