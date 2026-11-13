@@ -26,7 +26,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: "Something went wrong on the server" });
 });
 
-const port = Number(process.env.PORT) || 5000;
+const port = Number(process.env.PORT) || 5050;
 
 connectDb()
   .then((connection) => {

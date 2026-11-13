@@ -27,7 +27,7 @@ academic options lists.
    It is safe to run again; it updates what is there. `npm run seed:reset`
    empties the collections first.
 
-4. Start the API on port 5000 (the web app's dev server forwards `/api` to it):
+4. Start the API on port 5050 (the web app's dev server forwards `/api` to it):
 
    ```bash
    npm run dev

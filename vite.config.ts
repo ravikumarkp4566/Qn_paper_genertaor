@@ -23,7 +23,7 @@ export default defineConfig({
   // In development, /api calls go to the backend in server/ (npm run dev there).
   server: {
     proxy: {
-      '/api': process.env.API_PROXY_TARGET || 'http://localhost:5000',
+      '/api': process.env.API_PROXY_TARGET || 'http://localhost:5050',
     },
   },
 })
