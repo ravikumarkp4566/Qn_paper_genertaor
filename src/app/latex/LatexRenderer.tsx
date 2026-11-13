@@ -2,6 +2,7 @@ import { Fragment, memo, type ReactNode } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import type { Align, Block, Inline, ListItem, SourceRange, TableCell } from "./parser";
+import { QINFO_COLUMNS } from "./parser";
 
 /** Marks an element with the LaTeX it came from; the editor reads this to sync both panes. */
 export const sourceKey = (range?: SourceRange) => (range ? `${range[0]}:${range[1]}` : undefined);
@@ -72,6 +73,7 @@ function Inlines({ inlines, ctx }: { inlines: Inline[]; ctx: RenderContext }): R
       case "break":
         return <br key={index} />;
       case "hfill":
+      case "qinfo":
         return null;
       case "image": {
         const src = resolveImage(inline.name, ctx.images);
@@ -109,8 +111,34 @@ function Inlines({ inlines, ctx }: { inlines: Inline[]; ctx: RenderContext }): R
   });
 }
 
+/** The fixed-width right-hand columns: marks, BL, CO, PO, PSO. */
+function QinfoColumns({ cells, header = false }: { cells: string[]; header?: boolean }) {
+  return (
+    <div className={`flex shrink-0 text-[13px] ${header ? "font-bold" : ""}`}>
+      {QINFO_COLUMNS.map((_, index) => (
+        <span key={index} className={`w-10 text-center ${index === 0 && !header ? "font-bold" : ""}`}>
+          {cells[index] ?? ""}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** A line of text; `\hfill` pushes what follows it (usually marks) to the right edge. */
 function Line({ inlines, ctx, className = "" }: { inlines: Inline[]; ctx: RenderContext; className?: string }) {
+  const qinfo = inlines.find((x): x is Extract<Inline, { type: "qinfo" }> => x.type === "qinfo");
+  if (qinfo) {
+    // Question text on the left, its marks/BL/CO/PO/PSO in columns on the right.
+    return (
+      // Columns line up with the question's last line, as in the Word export.
+      <div className={`flex items-end gap-3 ${className}`}>
+        <div className="min-w-0 flex-1">
+          <Line inlines={inlines.filter((x) => x !== qinfo && x.type !== "hfill")} ctx={ctx} />
+        </div>
+        <QinfoColumns cells={qinfo.cells} />
+      </div>
+    );
+  }
   const fillAt = inlines.findIndex((x) => x.type === "hfill");
   if (fillAt === -1) {
     return (
@@ -226,6 +254,12 @@ function BlockView({ block, ctx }: { block: Block; ctx: RenderContext }) {
       return <hr className="border-slate-900" />;
     case "space":
       return <div className="h-3" />;
+    case "qinfoheader":
+      return (
+        <div className="flex justify-end border-b border-slate-300 pb-1">
+          <QinfoColumns cells={QINFO_COLUMNS} header />
+        </div>
+      );
     case "pagebreak":
       return (
         <div className="flex items-center gap-3 py-2 font-sans text-[11px] uppercase tracking-wider text-slate-400">
@@ -258,13 +292,15 @@ interface LatexRendererProps {
   blocks: Block[];
   macros: Record<string, string>;
   images: Record<string, string>;
+  /** Overrides the paper typography, e.g. for compact question previews. */
+  className?: string;
 }
 
 /** Renders a parsed LaTeX paper body in the serif style of a printed paper. */
-export const LatexRenderer = memo(function LatexRenderer({ blocks, macros, images }: LatexRendererProps) {
+export const LatexRenderer = memo(function LatexRenderer({ blocks, macros, images, className }: LatexRendererProps) {
   const ctx: RenderContext = { macros, images };
   return (
-    <div className="space-y-3 font-['Times_New_Roman',Times,serif] text-[16px] leading-relaxed text-slate-950">
+    <div className={className ?? "space-y-3 font-['Times_New_Roman',Times,serif] text-[16px] leading-relaxed text-slate-950"}>
       <Blocks blocks={blocks} ctx={ctx} />
     </div>
   );

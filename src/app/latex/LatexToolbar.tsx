@@ -9,6 +9,8 @@ export type ToolbarCommand = "undo" | "redo" | "comment" | "image";
 interface LatexToolbarProps {
   onSnippet: (snippet: Snippet) => void;
   onCommand: (command: ToolbarCommand) => void;
+  /** For a single question: hides tools that only make sense for a whole paper. */
+  compact?: boolean;
 }
 
 const MARKS: Snippet = { before: " \\hfill \\textbf{[", placeholder: "10", after: "]}" };
@@ -65,6 +67,9 @@ const MORE_ITEMS: { label: string; snippet: Snippet }[] = [
   { label: "Horizontal line", snippet: { block: true, before: "\\hrule" } },
   { label: "Page break", snippet: { block: true, before: "\\newpage" } },
 ];
+
+/** Inserts that shape a whole paper rather than one question. */
+const PAPER_ONLY_ITEMS = new Set(["Unit heading", "Section heading", "Page break"]);
 
 const SYMBOL_GROUPS: { name: string; symbols: [glyph: string, tex: string][] }[] = [
   {
@@ -163,7 +168,8 @@ function Popover({ label, title, children }: { label: ReactNode; title: string; 
 }
 
 /** Overleaf-style editing toolbar: formatting, maths, question structure, symbols. */
-export function LatexToolbar({ onSnippet, onCommand }: LatexToolbarProps) {
+export function LatexToolbar({ onSnippet, onCommand, compact = false }: LatexToolbarProps) {
+  const moreItems = compact ? MORE_ITEMS.filter((item) => !PAPER_ONLY_ITEMS.has(item.label)) : MORE_ITEMS;
   return (
     <div
       role="toolbar"
@@ -192,18 +198,22 @@ export function LatexToolbar({ onSnippet, onCommand }: LatexToolbarProps) {
       </ToolButton>
       <Divider />
 
-      <ToolButton title="New question with two parts" onClick={() => onSnippet(QUESTION)}>
-        <span>+ Question</span>
-      </ToolButton>
-      <ToolButton title="New sub-part (a), (b)…" onClick={() => onSnippet(PART)}>
-        <span>+ Part</span>
-      </ToolButton>
-      <ToolButton title="Marks on the right, e.g. [10]" onClick={() => onSnippet(MARKS)}>
-        <span>[M]</span>
-      </ToolButton>
-      <ToolButton title="OR between two questions" onClick={() => onSnippet(OR_LINE)}>
-        <span>OR</span>
-      </ToolButton>
+      {!compact && (
+        <>
+          <ToolButton title="New question with two parts" onClick={() => onSnippet(QUESTION)}>
+            <span>+ Question</span>
+          </ToolButton>
+          <ToolButton title="New sub-part (a), (b)…" onClick={() => onSnippet(PART)}>
+            <span>+ Part</span>
+          </ToolButton>
+          <ToolButton title="Marks on the right, e.g. [10]" onClick={() => onSnippet(MARKS)}>
+            <span>[M]</span>
+          </ToolButton>
+          <ToolButton title="OR between two questions" onClick={() => onSnippet(OR_LINE)}>
+            <span>OR</span>
+          </ToolButton>
+        </>
+      )}
       <ToolButton
         title="Numbered list"
         onClick={() => onSnippet({ block: true, before: "\\begin{enumerate}\n  \\item ", placeholder: "First", after: "\n  \\item Second\n\\end{enumerate}" })}
@@ -263,7 +273,7 @@ export function LatexToolbar({ onSnippet, onCommand }: LatexToolbarProps) {
       <Popover label={<span>More</span>} title="More things to insert">
         {(close) => (
           <div className="flex w-56 flex-col">
-            {MORE_ITEMS.map((item) => (
+            {moreItems.map((item) => (
               <button
                 key={item.label}
                 type="button"

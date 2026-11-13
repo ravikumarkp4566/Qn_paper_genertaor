@@ -88,6 +88,8 @@ export const Question = model(
       options: [String],
       correctOption: Number,
       difficulty: String,
+      /** Names of images attached to this question, used as \includegraphics{name} in its text. */
+      images: { type: [String], default: [] },
     },
     timestamps
   ).index({ college: 1, questionId: 1 }, { unique: true })

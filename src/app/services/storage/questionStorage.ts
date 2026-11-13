@@ -19,6 +19,8 @@ export interface Question {
   options?: string[];
   correctOption?: number;
   difficulty?: "Easy" | "Medium" | "Hard" | string;
+  /** Images attached to the question, referred to as \includegraphics{name} in its text. */
+  images?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -39,6 +41,11 @@ function subjectFor(question: NewQuestion): string {
 function send(question: Question): void {
   const { id, createdAt, updatedAt, ...body } = question;
   saveInBackground(api(`/questions/${encodeURIComponent(id)}`, { method: "PUT", body }), "the question");
+}
+
+/** A fresh id, for a question whose images are uploaded before it is first saved. */
+export function newQuestionIdForForm(): string {
+  return newQuestionId("Q");
 }
 
 export function getQuestions(subjectId?: string): Question[] {
@@ -95,6 +102,8 @@ export function importQuestions(newQuestions: NewQuestion[]): { addedCount: numb
   const now = new Date().toISOString();
   const added: Question[] = newQuestions.map((q) => ({
     ...q,
+    // Spreadsheet cells with $ or \ hold LaTeX (equations); others are plain text.
+    format: q.format ?? (/[$\\]/.test(q.text) ? "latex" : "text"),
     id: q.id?.trim() || newQuestionId("IMP"),
     subjectId: subjectFor(q),
     unit: Number(q.unit),

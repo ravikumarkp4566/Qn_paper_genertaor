@@ -104,6 +104,42 @@ api.delete("/subjects/:subjectId", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Files (GridFS): question images and LaTeX paper images
+// ---------------------------------------------------------------------------
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const imageKey = (college, paperId, name) => `latex/${college}/${paperId}/${name}`;
+const questionImageKey = (college, questionId, name) => `questions/${college}/${questionId}/${name}`;
+const rawImage = express.raw({ type: "image/*", limit: MAX_IMAGE_BYTES });
+
+async function deleteFiles(filter) {
+  const bucket = fileBucket();
+  for (const file of await bucket.find(filter).toArray()) await bucket.delete(file._id);
+}
+
+async function latestFile(filename) {
+  const [file] = await fileBucket().find({ filename }).sort({ uploadDate: -1 }).limit(1).toArray();
+  return file ?? null;
+}
+
+/** Replaces the file stored under `filename` with `source` (a Buffer or readable stream). */
+async function storeFile(filename, metadata, source) {
+  await deleteFiles({ filename });
+  const upload = fileBucket().openUploadStream(filename, { metadata });
+  const input = Buffer.isBuffer(source) ? Readable.from(source) : source;
+  await new Promise((resolve, reject) => input.pipe(upload).on("finish", resolve).on("error", reject));
+}
+
+function sendFile(res, file) {
+  res.type(file.metadata?.contentType ?? "application/octet-stream");
+  res.set("Cache-Control", "private, max-age=300");
+  fileBucket().openDownloadStream(file._id).pipe(res);
+}
+
+/** Image names become file names; keep them simple and safe. */
+const validImageName = (name) => /^[\w.-]{1,120}$/.test(name);
+
+// ---------------------------------------------------------------------------
 // Question bank
 // ---------------------------------------------------------------------------
 
@@ -142,8 +178,35 @@ api.post("/questions/import", async (req, res) => {
 });
 
 api.delete("/questions/:questionId", async (req, res) => {
-  const result = await Question.deleteOne({ college: collegeOf(req), questionId: req.params.questionId });
+  const college = collegeOf(req);
+  const result = await Question.deleteOne({ college, questionId: req.params.questionId });
   if (!result.deletedCount) return notFound(res, "Question");
+  await deleteFiles({ "metadata.kind": "question-image", "metadata.college": String(college), "metadata.questionId": req.params.questionId });
+  res.status(204).end();
+});
+
+// Images belong to a question and travel with it into papers. They can be
+// uploaded before the question is first saved (the form knows its id).
+api.get("/questions/:questionId/images/:name", async (req, res) => {
+  const file = await latestFile(questionImageKey(collegeOf(req), req.params.questionId, req.params.name));
+  if (!file) return notFound(res, "Image");
+  sendFile(res, file);
+});
+
+api.put("/questions/:questionId/images/:name", rawImage, async (req, res) => {
+  const { questionId, name } = req.params;
+  if (!validImageName(name)) return res.status(400).json({ error: "Use letters, digits, dots, dashes or underscores in image names" });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "Send the image bytes with an image/* content type" });
+  const college = String(collegeOf(req));
+  await storeFile(questionImageKey(college, questionId, name), { kind: "question-image", college, questionId, name, contentType: req.get("content-type") }, req.body);
+  await Question.updateOne({ college, questionId }, { $addToSet: { images: name } });
+  res.status(201).json({ name, size: req.body.length });
+});
+
+api.delete("/questions/:questionId/images/:name", async (req, res) => {
+  const college = collegeOf(req);
+  await deleteFiles({ filename: questionImageKey(college, req.params.questionId, req.params.name) });
+  await Question.updateOne({ college, questionId: req.params.questionId }, { $pull: { images: req.params.name } });
   res.status(204).end();
 });
 
@@ -181,14 +244,6 @@ api.delete("/papers/:paperId", async (req, res) => {
 // ---------------------------------------------------------------------------
 // LaTeX papers and their images
 // ---------------------------------------------------------------------------
-
-const imageKey = (college, paperId, name) => `latex/${college}/${paperId}/${name}`;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-async function deleteFiles(filter) {
-  const bucket = fileBucket();
-  for (const file of await bucket.find(filter).toArray()) await bucket.delete(file._id);
-}
 
 api.get("/latex-papers", async (req, res) => {
   const papers = await LatexPaper.find({ college: collegeOf(req) }).sort({ updatedAt: -1 });
@@ -233,6 +288,24 @@ api.get("/latex-papers/:paperId/images/:name", async (req, res) => {
   if (!file) return notFound(res, "Image");
   res.type(file.metadata?.contentType ?? "application/octet-stream");
   fileBucket().openDownloadStream(file._id).pipe(res);
+});
+
+/**
+ * Copies a question's image into a paper, on the server. Generate Paper uses
+ * this so a paper keeps its images even if the question is later changed.
+ */
+api.post("/latex-papers/:paperId/images/from-question", async (req, res) => {
+  const college = String(collegeOf(req));
+  const { questionId, name, as } = req.body ?? {};
+  if (!questionId || !name || !validImageName(String(as ?? ""))) return res.status(400).json({ error: "questionId, name and a valid target name (as) are required" });
+  const file = await latestFile(questionImageKey(college, questionId, name));
+  if (!file) return notFound(res, "Question image");
+  await storeFile(
+    imageKey(college, req.params.paperId, as),
+    { kind: "latex-image", college, paperId: req.params.paperId, name: as, contentType: file.metadata?.contentType },
+    fileBucket().openDownloadStream(file._id)
+  );
+  res.status(201).json({ name: as });
 });
 
 api.put(

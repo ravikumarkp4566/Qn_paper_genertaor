@@ -1,7 +1,8 @@
 // Papers written in the LaTeX editor, stored in the database (collection
 // "latexpapers"); their images are stored by the server in GridFS.
 
-import { parseLatex, type PaperMeta } from "../../latex/parser";
+import { durationToMinutes, parseLatex, type PaperMeta } from "../../latex/parser";
+import { paperToLatex, type GeneratedPaper } from "../../latex/paperToLatex";
 import { instituteCommands } from "../../latex/sampleSource";
 import { api, apiBlob } from "../api";
 import { cache } from "../dataStore";
@@ -51,6 +52,37 @@ export async function saveLatexPaper(paper: Omit<LatexPaperRecord, "createdAt" |
   const others = cache.latexPapers.filter((existing) => existing.id !== id);
   cache.latexPapers = [saved, ...others];
   return saved;
+}
+
+/** The list fields History shows, read from the paper's own header commands. */
+export function latexPaperFields(source: string): Omit<LatexPaperRecord, "id" | "source" | "createdAt" | "updatedAt"> {
+  const { meta } = parseLatex(source);
+  return {
+    title: meta.examTitle?.text ?? "",
+    subjectName: meta.subject?.text || "Untitled LaTeX paper",
+    courseCode: meta.courseCode?.text ?? "",
+    semester: meta.semester?.text ?? "",
+    totalMarks: parseInt(meta.maxMarks?.text ?? "", 10) || 0,
+    duration: durationToMinutes(meta.duration?.text ?? ""),
+    date: meta.examDate?.text ?? "",
+    showHeader: meta.showHeader,
+    instructions: meta.notes.map((note) => note.text),
+  };
+}
+
+/**
+ * Turns a paper from Generate Paper into a LaTeX paper: writes its LaTeX,
+ * copies the chosen questions' images into it on the server, and saves it.
+ * Resolves to the new paper's id.
+ */
+export async function createLatexPaperFromGenerated(paper: GeneratedPaper): Promise<string> {
+  const id = newLatexPaperId();
+  const { source, images } = paperToLatex(paper);
+  await Promise.all(
+    images.map((image) => api(`${paperPath(id)}/images/from-question`, { method: "POST", body: image }))
+  );
+  await saveLatexPaper({ id, source, ...latexPaperFields(source) });
+  return id;
 }
 
 export function hasHeaderCommands(meta: PaperMeta): boolean {

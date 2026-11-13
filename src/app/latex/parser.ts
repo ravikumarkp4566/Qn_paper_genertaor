@@ -13,7 +13,12 @@ export type Inline =
   | { type: "break" }
   | { type: "hfill" }
   | { type: "image"; name: string; width?: string; height?: string }
+  /** \qinfo{M}{BL}{CO}{PO}{PSO}: the right-hand columns of a question line. */
+  | { type: "qinfo"; cells: string[] }
   | { type: "unknown"; raw: string };
+
+/** Column titles for \qinfo, printed by \qinfoheader. */
+export const QINFO_COLUMNS = ["M", "BL", "CO", "PO", "PSO"];
 
 /** Where a piece of the paper came from: [start, end) offsets into the LaTeX source. */
 export type SourceRange = [start: number, end: number];
@@ -43,6 +48,7 @@ type BlockBody =
   | { type: "rule" }
   | { type: "space" }
   | { type: "pagebreak" }
+  | { type: "qinfoheader" }
   | { type: "unknown"; raw: string; reason: string };
 
 export type Block = BlockBody & { range?: SourceRange };
@@ -682,6 +688,20 @@ function parseInlines(s: string, ctx: Ctx): Inline[] {
       continue;
     }
 
+    if (name === "qinfo") {
+      const cells: string[] = [];
+      let k = j;
+      for (let n = 0; n < QINFO_COLUMNS.length; n++) {
+        const arg = readGroup(s, skipSpaces(s, k));
+        if (!arg) break;
+        cells.push(inlinesToPlainText(parseInlines(arg.content, ctx)).trim());
+        k = arg.end;
+      }
+      push({ type: "qinfo", cells });
+      i = k;
+      continue;
+    }
+
     if (name === "marks" || name === "hfillmarks") {
       const arg = readArg(s, j);
       if (arg) {
@@ -1275,6 +1295,13 @@ function parseBlocks(s: string, ctx: Ctx, depth: number, base: number): Block[] 
       }
       emit({ type: "space" }, i, k);
       i = k;
+      continue;
+    }
+
+    if (name === "qinfoheader") {
+      flush();
+      emit({ type: "qinfoheader" }, i, afterName);
+      i = afterName;
       continue;
     }
 

@@ -28,7 +28,7 @@ import { saveAs } from "file-saver";
 import { SIT_LOGO_DATA_URL } from "../assets/sitLogo";
 import { latexToOmml } from "./omml";
 import { cache } from "../services/dataStore";
-import { parseLatex, type Align, type Block, type Inline, type ListItem, type PaperMeta, type TableCell as LatexCell } from "./parser";
+import { parseLatex, QINFO_COLUMNS, type Align, type Block, type Inline, type ListItem, type PaperMeta, type TableCell as LatexCell } from "./parser";
 
 // A4 with 0.7 inch margins. Word measures in twips (1/20 pt); 15 twips = 1 px.
 const PAGE_WIDTH = 11906;
@@ -238,26 +238,55 @@ function inlineChildren(inlines: Inline[], ctx: Context, style: RunStyle = {}): 
 // Blocks
 // ---------------------------------------------------------------------------
 
+// The marks/BL/CO/PO/PSO columns (\qinfo) sit at the right edge, one centre tab each.
+const QINFO_COLUMN_WIDTH = 560;
+const QINFO_WIDTH = QINFO_COLUMNS.length * QINFO_COLUMN_WIDTH;
+const QINFO_TABS = QINFO_COLUMNS.map((_, index) => ({
+  type: TabStopType.CENTER,
+  position: TEXT_WIDTH - QINFO_WIDTH + Math.round((index + 0.5) * QINFO_COLUMN_WIDTH),
+}));
+
+function qinfoRuns(cells: string[], header = false): ParagraphChild[] {
+  return QINFO_COLUMNS.flatMap((_, index) => [
+    new TextRun({ children: [new Tab()] }),
+    new TextRun({ text: cells[index] ?? "", bold: header || index === 0, size: 20 }),
+  ]);
+}
+
 /** A paragraph in the current layout. Pending list labels and marks go on its first line. */
-function paragraph(children: ParagraphChild[], env: Env, options: { spacingAfter?: number } = {}): Paragraph {
+function paragraph(
+  children: ParagraphChild[],
+  env: Env,
+  options: { spacingAfter?: number; qinfo?: string[] } = {}
+): Paragraph {
   const labels = env.labels.splice(0);
   const marks = env.marks;
   env.marks = undefined;
   const content = [...children];
   if (marks) content.push(new TextRun({ children: [new Tab()] }), new TextRun({ text: `[${marks}]`, bold: true }));
+  // Text wraps before the columns; the columns are reached with tabs past the right indent.
+  if (options.qinfo) content.push(...qinfoRuns(options.qinfo));
+  const right = options.qinfo ? QINFO_WIDTH + 120 : undefined;
+  const endTabs = options.qinfo ? QINFO_TABS : [RIGHT_TAB];
 
   const spacing = { after: options.spacingAfter ?? 80 };
   const alignment = env.align ? ALIGNMENT[env.align] : undefined;
   if (labels.length === 0) {
-    return new Paragraph({ children: content, indent: env.indent ? { left: env.indent } : undefined, alignment, tabStops: [RIGHT_TAB], spacing });
+    return new Paragraph({
+      children: content,
+      indent: env.indent || right ? { left: env.indent, right } : undefined,
+      alignment,
+      tabStops: endTabs,
+      spacing,
+    });
   }
   // Labels hang to the left of the text: "1.  (a)  Solve ..." with each label on its own tab stop.
   const labelRuns: ParagraphChild[] = labels.flatMap((label) => [new TextRun(label.text), new TextRun({ children: [new Tab()] })]);
   const stops = [...labels.slice(1).map((label) => label.at), env.indent].map((position) => ({ type: TabStopType.LEFT, position }));
   return new Paragraph({
     children: [...labelRuns, ...content],
-    indent: { left: env.indent, hanging: env.indent - labels[0].at },
-    tabStops: [...stops, RIGHT_TAB],
+    indent: { left: env.indent, hanging: env.indent - labels[0].at, right },
+    tabStops: [...stops, ...endTabs],
     alignment,
     spacing,
   });
@@ -350,8 +379,21 @@ function listItems(block: Extract<Block, { type: "list" }>, env: Env, ctx: Conte
 function blocks(list: Block[], env: Env, ctx: Context, depth: number, out: BodyItem[]) {
   for (const block of list) {
     switch (block.type) {
-      case "paragraph":
-        out.push(paragraph(inlineChildren(block.inlines, ctx), env));
+      case "paragraph": {
+        const qinfo = block.inlines.find((x): x is Extract<Inline, { type: "qinfo" }> => x.type === "qinfo");
+        const text = qinfo ? block.inlines.filter((x) => x !== qinfo && x.type !== "hfill") : block.inlines;
+        out.push(paragraph(inlineChildren(text, ctx), env, { qinfo: qinfo?.cells }));
+        break;
+      }
+      case "qinfoheader":
+        out.push(
+          new Paragraph({
+            children: qinfoRuns(QINFO_COLUMNS, true),
+            tabStops: QINFO_TABS,
+            border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "999999", space: 1 } },
+            spacing: { after: 120 },
+          })
+        );
         break;
       case "heading": {
         const size = block.level === 1 ? 28 : block.level === 2 ? 26 : 24;

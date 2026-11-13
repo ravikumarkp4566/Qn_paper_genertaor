@@ -21,6 +21,10 @@ export interface PaperRequirement {
 
 export interface PaperPart {
   text: string;
+  /** Set when the part came from the question bank, so its LaTeX and images can follow it. */
+  questionId?: string;
+  format?: "text" | "latex";
+  images?: string[];
   marks: number;
   options?: string[];
   correctOption?: number;
